@@ -27,6 +27,12 @@ public partial class OverlayViewModel : ObservableObject
     private string _statusText = "Unavailable";
 
     [ObservableProperty]
+    private string _openAiStatusText = "Unavailable";
+
+    [ObservableProperty]
+    private string _anthropicStatusText = "Unavailable";
+
+    [ObservableProperty]
     private string _activityText = "Activity unavailable";
 
     public void LoadDevelopmentScenario()
@@ -35,12 +41,17 @@ public partial class OverlayViewModel : ObservableObject
         {
             return;
         }
-        var state = MockScenarioCatalog.Create(scenario);
+        ApplyScenario(ProviderId.OpenAi, scenario);
+        ApplyScenario(ProviderId.Anthropic, scenario);
+    }
+
+    public void ApplyScenario(ProviderId provider, MockScenario scenario)
+    {
+        var state = MockScenarioCatalog.Create(provider, scenario);
         var headline = state.Snapshot?.Headline?.Limit.UsedFraction is { } fraction
-            ? $"{fraction:P0} used"
-            : "-";
-        OpenAiHeadline = headline;
-        StatusText = state.Status.Authentication switch
+            ? $"{fraction * 100:0}% used"
+            : state.Snapshot?.Headline is null ? "Awaiting updated window" : "-";
+        var status = state.Status.Authentication switch
         {
             AuthenticationState.Authenticated => state.Status.Freshness == DataFreshness.Stale ? "Stale" : "Connected",
             AuthenticationState.Missing => "Sign in required",
@@ -50,10 +61,22 @@ public partial class OverlayViewModel : ObservableObject
             AuthenticationState.Unsupported => "Unsupported",
             _ => scenario == MockScenario.Loading ? "Loading" : "Unavailable",
         };
-        ActivityText = state.Activity is null
+        var activity = state.Activity is null
             ? "Activity unavailable"
             : state.Activity.Fidelity == ReadingFidelity.Derived ? $"{state.Activity.State}, estimated" : state.Activity.State.ToString();
-        DetailText = $"{StatusText}. {ActivityText}.";
+        if (provider == ProviderId.OpenAi)
+        {
+            OpenAiHeadline = headline;
+            OpenAiStatusText = status;
+            StatusText = status;
+            ActivityText = activity;
+            DetailText = $"{StatusText}. {ActivityText}.";
+        }
+        else
+        {
+            AnthropicHeadline = headline;
+            AnthropicStatusText = status;
+        }
     }
 
     public void ShowDetail(string title, string detail)

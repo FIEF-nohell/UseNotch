@@ -49,6 +49,7 @@ public sealed record UsageLimit
     public decimal? Capacity { get; }
     public decimal? UsedFraction { get; }
     public string Unit { get; }
+    public decimal? DisplayFraction => UsedFraction is null ? null : Math.Clamp(UsedFraction.Value, 0, 1);
 }
 
 public sealed record QuotaWindow

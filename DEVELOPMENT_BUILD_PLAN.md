@@ -63,14 +63,14 @@ Update this block before stopping or handing off. Replace stale values instead o
 | Field | Current value |
 |---|---|
 | Overall state | M03 native overlay behavior gate is in progress; providers are not implemented |
-| Active milestone | M04, shared domain models and mock provider scenarios, with M03 DPI gate still open |
-| Last completed milestone | M02 |
-| Last validated checkpoint | Completion commit `feat: add tray and app lifecycle (M02)`; M00 is `4d10e83`, M01 is `254447a`. |
+| Active milestone | M05, polling, concurrency, and durable cache foundation; M03 DPI gate remains explicitly open |
+| Last completed milestone | M04 |
+| Last validated checkpoint | M04 completion commit `feat: add domain and mock scenarios (M04)`; M00 is `4d10e83`, M01 is `254447a`, M02 is `c15d86a`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | M03 overlay geometry, HWND behavior host, static overlay view, validation harness, and initial M04 domain/application models are in progress |
+| Files currently changed | M03 overlay validation harness and M04 domain/application/UI scenario implementation are complete in the pending checkpoint |
 | Last verification | M04 continuation Release build passed with zero warnings/errors; 18 Application tests, 4 Domain tests, 11 Windows tests, and 6 UI tests passed; formatting and diff whitespace checks passed. M03 remains validated only at 100% plus the negative-coordinate monitor run |
-| Next exact action | Finish M04 fixture catalog and presentation bindings, then return to the M03 150% and 200% interactive checks after an actual Windows sign-out |
+| Next exact action | Begin M05 polling coordinator and state-store contracts. M03 150% and 200% remain a documented deferred interactive gate |
 | Blocking condition | M03 remains open because this interactive session exposes all monitors at 100%, and per-monitor registry edits did not affect new processes without sign-out. The user requested continuing with M04 before this gate is rerun |
 | Known implementation failures | Provider.Tests intentionally has no tests yet. No known overlay code failure remains at the tested 100% layouts. The harness can lose its foreground-set request when the user changes foreground during an automated run; this is a Windows focus-policy limitation in the harness, not an accepted overlay result |
 | Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
@@ -113,8 +113,7 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 | M02 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added explicit tray-owned lifetime, lazily reused Settings window, close-to-hide behavior, disabled future tray actions, and a same-user/session mutex plus 750 ms named-pipe activation or shutdown signal. The normal Settings surface can be requested by a later launch if the tray is unavailable. Release build had zero warnings/errors; 17 tests passed; formatting and whitespace checks passed. Native smoke verified hidden owner, bounded second launch, status window binding, non-elevation, PerMonitorV2, close-to-hide, and clean shutdown. | `feat: add tray and app lifecycle (M02)` | M03 native overlay gate. No Explorer restart was forced in this interactive development session; the tray host remains Avalonia-owned and a later launch remains the normal-window recovery path. No remote push or provider access performed |
 | M03 partial | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Implemented static OpenAI and Anthropic overlay cells, transparent borderless Avalonia window configuration, pure four-edge placement, monitor fallback, DPI conversion, native no-activate behavior, and bounded Win32 input regions. Added an independent-process input harness. Release build had zero warnings/errors; 24 solution tests passed; formatting and whitespace checks passed. One interactive native run proved transparent-corner click and wheel pass-through, visible-cell expansion without foreground activation, and clean exit. | `wip: add M03 overlay prototype` | Do not complete M03 yet. Validate the harness at 100%, 150%, and 200%, including an interactive negative-coordinate secondary monitor. The harness foreground request can be rejected by Windows when user interaction changes foreground during the run |
 | M03 partial continuation | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Fixed the initial layout race by applying native input regions after `UpdateLayout` and a render-priority refresh. `pwsh -NoProfile -File scripts/Test-OverlayBehavior.ps1` passed at 100% on the primary monitor. `pwsh -NoProfile -File scripts/Test-OverlayBehavior.ps1 -NegativeMonitor` passed on the selected secondary monitor at negative coordinates `(-913,-1440)`, with overlay bounds `1387,-830 260x220`. Both runs preserved foreground focus, passed transparent corner click and wheel input, expanded the visible cell, and exited cleanly. | Uncommitted M03 continuation | 150% and 200% could not be honestly run: all three monitors reported 96 DPI, and changing `PerMonitorSettings\DpiValue` did not affect new processes without signing out. The original per-monitor values were restored. Next action is an actual sign-out-based DPI matrix, then M03 completion commit and push if both pass |
-| M04 partial | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added immutable provider, connection, account, authentication, quota, usage, activity, freshness, fidelity, source, status, and error models with validation. Added deterministic mock scenario catalog and explicit development-only `--mock-scenario=` overlay selection. Added 12 scenario tests covering failure states, stale readings, stable headlines, and activity fidelity. Release build passed with zero warnings/errors, all 39 discovered tests passed, formatting passed, and `git diff --check` passed. | Uncommitted M04 continuation | M04 still needs provider definitions for both supported providers, a fuller fixture catalog bound to both provider cells/details, and its completion checkpoint commit. M03 150% and 200% remain intentionally deferred |
-| M04 partial | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added immutable provider, connection, account, authentication, quota, usage, activity, freshness, fidelity, source, status, and error models with validation. Added `IUsageProvider`, `IProviderRegistry`, `MockScenario`, and a deterministic network-free `MockUsageProvider`. Added four domain invariant tests. Release build passed with zero warnings/errors and the domain test project passed 4 tests. | Uncommitted M04 continuation | Fixture catalog, provider status presentation bindings, full scenario coverage, and M04 completion commit remain. M03 actual 150% and 200% interactive checks also remain open |
+| M04 | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added immutable domain models, two-provider registry, deterministic network-free fixtures for every required auth/quota/activity state, stable headline and reset-passed semantics, over-limit display clamping, explicit source fidelity, real overlay bindings for both provider cells, and an explicit `--mock-scenario=` development selector. Production has no implicit mock fallback. Release build passed with zero warnings/errors, 23 Application tests, 5 Domain tests, 11 Windows tests, and 8 UI tests passed, formatting passed, and `git diff --check` passed. | `feat: add domain and mock scenarios (M04)` | M03 150% and 200% remain intentionally deferred per the user's instruction. Begin M05 |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
@@ -143,7 +142,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M01: Solution, dependencies, non-elevated manifest, and CI build.
 - [x] M02: Avalonia shell, tray, and application lifecycle.
 - [ ] M03: Native overlay prototype and Windows behavior gate.
-- [ ] M04: Shared domain, mock provider, and complete state fixtures.
+- [x] M04: Shared domain, mock provider, and complete state fixtures.
 - [ ] M05: Polling, concurrency, state store, and JSON cache.
 - [ ] M06: OpenAI / Codex usage integration.
 - [ ] M07: Anthropic / Claude Code usage integration.
@@ -280,14 +279,14 @@ Objective: define honest readings and make the complete experience testable offl
 
 Areas: Domain, Application contracts, mock provider, fixture catalog, basic provider cell/detail view models.
 
-- [ ] Define provider connection, account scope, authentication, snapshot, quota window/limit, usage block, activity, status/error, freshness, and fidelity models.
-- [ ] Keep tokens, raw JSON, UI glyphs, native handles, and database rows outside Domain.
-- [ ] Implement stable headline selection, optional values/units, over-limit display rules, and UTC timestamps.
-- [ ] Distinguish provider-reported fidelity from documented versus unpublished source contracts.
-- [ ] Build synthetic fixtures for loading, authenticated, missing, expired, rejected, forbidden, unsupported, stale, reset-passed, rate-limited, and error states.
-- [ ] Add observed working/waiting and estimated/unknown activity fixtures.
-- [ ] Bind fixtures through the real presentation path and provide a development-only scenario selector.
-- [ ] Make mocking explicit; production must not silently replace failed live requests with demo values.
+- [x] Define provider connection, account scope, authentication, snapshot, quota window/limit, usage block, activity, status/error, freshness, and fidelity models.
+- [x] Keep tokens, raw JSON, UI glyphs, native handles, and database rows outside Domain.
+- [x] Implement stable headline selection, optional values/units, over-limit display rules, and UTC timestamps.
+- [x] Distinguish provider-reported fidelity from documented versus unpublished source contracts.
+- [x] Build synthetic fixtures for loading, authenticated, missing, expired, rejected, forbidden, unsupported, stale, reset-passed, rate-limited, and error states.
+- [x] Add observed working/waiting and estimated/unknown activity fixtures.
+- [x] Bind fixtures through the real presentation path and provide a development-only scenario selector.
+- [x] Make mocking explicit; production must not silently replace failed live requests with demo values.
 
 Acceptance: every required visible state is reproducible without file access or network; missing values never render as authoritative zero; absent headline does not promote a different window.
 

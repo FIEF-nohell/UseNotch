@@ -25,5 +25,15 @@ public class UsageModelTests
         var limit = new UsageLimit(12, null, 10, 1.2m, "requests");
 
         Assert.Equal(1.2m, limit.UsedFraction);
+        Assert.Equal(1m, limit.DisplayFraction);
+    }
+
+    [Fact]
+    public void Missing_capacity_remains_missing()
+    {
+        var limit = new UsageLimit(2, null, null, null, "requests");
+
+        Assert.Null(limit.Capacity);
+        Assert.Null(limit.DisplayFraction);
     }
 }
