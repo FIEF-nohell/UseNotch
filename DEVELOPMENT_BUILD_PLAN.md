@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M00-M10 are complete. M11-M14 remain open.
+Status: M00-M11 are complete. M12-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,15 +62,15 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M00-M10 are complete. A pre-existing defect that made the overlay swallow every click inside its rectangle was found by measurement and fixed, and the interactive input and focus gate now passes at 175 percent display scaling |
-| Active milestone | M11, MVP cache verification and explicit history deferral |
-| Last completed milestone | M10, overlay polish, detailed status, and accessibility |
+| Overall state | M00-M11 are complete. The MVP persistence boundary is verified: a sanitized last-good JSON cache, no history database, and no path by which cached or old-account data can be presented as current |
+| Active milestone | M12, WiX packaging and build/release pipeline validation |
+| Last completed milestone | M11, MVP cache verification and explicit history deferral |
 | Last validated checkpoint | Provider integration checkpoint `637d397` (`chore: checkpoint M07 provider integration`); Codex alternate-schema fix `655ad2f`; overlay regression fix `1203d52`; M06 synthetic checkpoint `929716a`; M05 `5586660`; M00 `4d10e83`; M01 `254447a`; M02 `c15d86a`; M04 `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | The Windows worktree `C:\Users\Noel Hermann\Projects\UseNotch`. The previous session's Linux-side changes were rebuilt and re-tested here and hold |
-| Files currently changed | Committed in the M10 completion commit. No provider credentials or raw account data are present in the repository |
-| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 33/33, Provider 75/75, UI 39/39, Application 121/121, 273 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `pwsh -NoProfile -File scripts/Test-OverlayBehavior.ps1` passed on the primary monitor at 175 percent scaling |
-| Next exact action | Begin M11, following its task list in section 4 |
+| Files currently changed | Committed in the M11 completion commit. No provider credentials or raw account data are present in the repository |
+| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 33/33, Provider 75/75, UI 39/39, Application 133/133, 285 total. `dotnet format --verify-no-changes` and `git diff --check` passed. A full application run left only `cache\OpenAi.json` and `cache\Anthropic.json` under the application data root, both with a null activity value and a 16-character opaque account partition |
+| Next exact action | Begin M12, following its task list in section 4 |
 | Blocking condition | None |
 | Known implementation failures | None outstanding. The overlay behaviour check's negative-coordinate variant cannot run on this machine because only one monitor is attached; it now says so explicitly instead of timing out |
 | Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts, as is the `.tmp\hang.dmp` capture used to diagnose the earlier shutdown deadlock |
@@ -135,6 +135,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 
 | M10 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, single monitor at 175 percent scaling, isolated SDK 8.0.424 | Completed the overlay work checkpointed above and closed its interactive gate, which required fixing a real defect that predated this milestone. Measurement showed the overlay captured every click inside its rectangle: returning `HTTRANSPARENT` from `WM_NCHITTEST` only forwards input to another window owned by the same thread, so it could never hand a click to a different application. The same measurement showed a second fault: Avalonia reported a render scaling of 1.75 for a window whose client area equalled its device-independent size, so multiplying by it placed every interactive region outside the window. Click-through now uses a cursor-polled `WS_EX_TRANSPARENT` toggle over a layered window, with `WM_NCHITTEST` retained for the precise per-region answer, and the window reports device-independent regions that the platform converts using the real client size. Both were confirmed against the build from the previous milestone, which failed the same way, so neither was introduced by the overlay rebuild. Added `OverlayRegionScaler` with tests covering 100 percent, scaled, and unusable client sizes. Locked restore, zero-warning Release build, 273 solution tests (Domain 5, Windows 33, Provider 75, UI 39, Application 121), `dotnet format --verify-no-changes`, and `git diff --check` passed. `scripts/Test-OverlayBehavior.ps1` passed on the primary monitor at 175 percent: a real click and wheel in transparent space reached an independent process, hovering the handle expanded the overlay without taking foreground, and the visible cell opened details without activating the overlay window. | `feat: polish overlay and accessibility (M10)` | Begin M11. The negative-coordinate variant of the overlay check could not run because only one monitor is attached; the script now reports that instead of timing out |
 
+| M11 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Closed the persistence boundary for the first release. Fixed a real gap found by its own test: the JSON cache serialized whatever state it was handed, so a state carrying activity would have written a session label to disk. The cache now strips activity both when writing and when loading, which also guarantees a restored reading can never arrive with stale activity attached. Added a source-identifier check so a cached reading captured from a different credential source is discarded rather than shown while the first live read runs. Verified by test: offline restart serves the last good reading marked cached and stale; a reading older than 24 hours is expired and loses its headline; a window whose reset has passed loses its headline; disconnecting clears both state and cache; a save cannot land after a disconnect, because disconnect awaits the worker first; a corrupt or future-version cache is ignored while the provider still starts; a save leaves no partial file. Confirmed no chart package is referenced and no source mentions a history database or repository. Locked restore, zero-warning Release build, 285 solution tests (Domain 5, Windows 33, Provider 75, UI 39, Application 133), `dotnet format --verify-no-changes`, and `git diff --check` passed. A full application run left only the two sanitized JSON cache files under the application data root, each with a null activity value and an opaque account partition. | `fix: finalize cache recovery rules (M11)` | Begin M12. H01 remains deferred and unchecked; no history interface or implementation exists to maintain |
+
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
 ### Decisions and deviations log
@@ -156,6 +158,8 @@ Use milestone IDs as checkpoint references until a short hash can be recorded in
 | 2026-09-07 | Saved settings decide which providers run; the `--enable-codex` and `--enable-claude` switches remain as development overrides | Settings became the real configuration surface in M09. Keeping the switches avoids changing a user's stored configuration during a development or smoke run |
 | 2026-09-07 | Cross-process click-through uses a cursor-polled `WS_EX_TRANSPARENT` toggle, with `WM_NCHITTEST` kept for precision | Returning `HTTRANSPARENT` only forwards a click to another window owned by the same thread, so it cannot hand input to another application. This was found by measurement after the M06 change from `SetWindowRgn`, and it meant the overlay silently swallowed every click inside its rectangle |
 | 2026-09-07 | The overlay window reports interactive regions in device-independent units and the platform converts them | Avalonia reported a render scaling of 1.75 for a window whose client area matched its device-independent size, which placed every region outside the window. Converting with the real client size is correct regardless of what scaling is reported |
+| 2026-09-07 | Persistent history stays deferred as H01 and is not implemented for the first release | The sanitized last-good JSON cache covers the recovery the MVP needs, verified in M11. No history interface, database, or chart dependency exists, so nothing has to be maintained or removed before release |
+| 2026-09-07 | A cached reading is restored only when its source identifier matches the current connection | Otherwise a reading captured from a different credential source, and possibly a different account, would be shown while the first live read is still running |
 
 Add dated entries for dependency upgrades, platform limitations, changed provider contracts, and scope changes. Update both plans if a product or architecture decision changes. Do not silently replace requirements with easier behavior.
 
@@ -174,7 +178,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M08: Conservative local activity monitoring.
 - [x] M09: Settings, privacy, source selection, and startup.
 - [x] M10: Overlay polish, detailed status, and accessibility.
-- [ ] M11: MVP cache verification and explicit history deferral.
+- [x] M11: MVP cache verification and explicit history deferral.
 - [ ] M12: WiX packaging and build/release pipeline validation.
 - [ ] M13: End-to-end, resource, recovery, and Windows matrix validation.
 - [ ] M14: Release hardening and validated release candidate.
@@ -476,12 +480,12 @@ Objective: close persistence gaps while keeping optional charts out of the first
 
 Areas: last-good cache, cache/privacy UI, freshness policy, decision log; no production history database required.
 
-- [ ] Verify offline restart, expired tokens, missing sources, reset-passed windows, and 24-hour compact-reading expiry.
-- [ ] Verify old-account data cannot return after source change, disconnect, cache restoration, or a delayed save.
-- [ ] Confirm last-good persistence stores normalized quota only, without activity text or account secrets.
-- [ ] Confirm the production build functions without creating a history database or loading a chart library.
-- [ ] Record the explicit H01 history deferral and keep H01 unchecked.
-- [ ] Keep any history interface minimal and optional; remove unused speculative implementation if it adds maintenance cost.
+- [x] Verify offline restart, expired tokens, missing sources, reset-passed windows, and 24-hour compact-reading expiry. Each is covered by a test, and the offline restart was also confirmed live in the M06 vertical slice.
+- [x] Verify old-account data cannot return after source change, disconnect, cache restoration, or a delayed save. A cached reading whose source identifier does not match the current connection is now discarded instead of shown, disconnecting clears both the state and the cache, and disconnect awaits the worker before clearing so a late save cannot resurrect a reading.
+- [x] Confirm last-good persistence stores normalized quota only, without activity text or account secrets. The cache now strips activity when writing and when loading, which fixed a real gap: a state carrying activity would previously have written its session label to disk. Only the opaque account partition, which section 7 allows, is stored.
+- [x] Confirm the production build functions without creating a history database or loading a chart library. A test asserts no chart package is referenced and no source mentions a history database or repository, and a full application run left only the two sanitized JSON cache files under the application data root.
+- [x] Record the explicit H01 history deferral and keep H01 unchecked. See the decisions log entry dated 2026-09-07; H01 remains unchecked in the tracker.
+- [x] Keep any history interface minimal and optional; remove unused speculative implementation if it adds maintenance cost. No history interface or implementation exists, so there was nothing speculative to remove and nothing to maintain.
 
 Acceptance: the first release has reliable recovery with JSON only; no hidden historical retention; history remains clearly post-MVP.
 

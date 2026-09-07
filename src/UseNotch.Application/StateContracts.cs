@@ -169,6 +169,14 @@ public sealed class PollingCoordinator : IAsyncDisposable
         if (_cache is not null)
         {
             var cached = await _cache.LoadAsync(connection.Provider, cancellationToken);
+            if (cached is not null && !string.Equals(cached.Connection.SourceId, connection.SourceId, StringComparison.Ordinal))
+            {
+                // The reading came from a different credential source, so it may belong to a different
+                // account. Discard it rather than showing it while the first live read is still running.
+                await _cache.ClearAsync(connection.Provider, cancellationToken);
+                cached = null;
+            }
+
             if (cached is not null && cached.Connection.Provider == connection.Provider)
             {
                 var restored = FreshnessPolicy.Normalize(cached.ForConnection(connection), _timeProvider.GetUtcNow());

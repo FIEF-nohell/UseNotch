@@ -75,7 +75,7 @@ public sealed class JsonUsageCache(string rootDirectory, int currentSchemaVersio
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
             var entry = await JsonSerializer.DeserializeAsync<CachedProviderState>(stream, _jsonOptions, cancellationToken);
-            return entry?.SchemaVersion == currentSchemaVersion ? entry.State : null;
+            return entry?.SchemaVersion == currentSchemaVersion ? entry.State with { Activity = null } : null;
         }
         catch (JsonException) { return null; }
         catch (IOException) { return null; }
@@ -90,7 +90,10 @@ public sealed class JsonUsageCache(string rootDirectory, int currentSchemaVersio
             Directory.CreateDirectory(rootDirectory);
             await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true))
             {
-                await JsonSerializer.SerializeAsync(stream, new CachedProviderState(currentSchemaVersion, DateTimeOffset.UtcNow, state), _jsonOptions, cancellationToken);
+                // The cache holds normalized quota only. Activity is live, may carry a source-supplied
+                // label, and must never be written to disk or restored as if it were a reading.
+                var sanitized = state with { Activity = null };
+                await JsonSerializer.SerializeAsync(stream, new CachedProviderState(currentSchemaVersion, DateTimeOffset.UtcNow, sanitized), _jsonOptions, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
             File.Move(temporaryPath, path, true);
