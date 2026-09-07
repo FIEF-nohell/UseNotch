@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UseNotch.App.ViewModels"
+        x:Class="UseNotch.App.Views.OverlayWindow"
+        x:DataType="vm:OverlayViewModel"
+        Title="UseNotch overlay"
+        Width="260"
+        Height="220"
+        Background="Transparent"
+        CanResize="False"
+        ShowActivated="False"
+        ShowInTaskbar="False"
+        SystemDecorations="None"
+        Topmost="True"
+        TransparencyLevelHint="Transparent"
+        WindowStartupLocation="Manual">
+  <Grid Background="Transparent">
+    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="6">
+      <Button x:Name="OpenAiCell" Classes="overlayCell" Click="OnOpenAiClicked">
+        <StackPanel Spacing="1">
+          <TextBlock Text="OPENAI" Classes="providerLabel" />
+          <TextBlock Text="Static" Classes="providerValue" />
+        </StackPanel>
+      </Button>
+      <Button x:Name="AnthropicCell" Classes="overlayCell" Click="OnAnthropicClicked">
+        <StackPanel Spacing="1">
+          <TextBlock Text="ANTHROPIC" Classes="providerLabel" />
+          <TextBlock Text="Static" Classes="providerValue" />
+        </StackPanel>
+      </Button>
+    </StackPanel>
+    <Border x:Name="DetailPanel"
+            IsVisible="False"
+            Width="170"
+            Padding="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Background="#F0181D26"
+            BorderBrush="#FF3A475A"
+            BorderThickness="1"
+            CornerRadius="8">
+      <StackPanel Spacing="6">
+        <TextBlock x:Name="DetailTitle" Text="OpenAI status" Classes="detailTitle" />
+        <TextBlock x:Name="DetailText" Text="Static overlay validation." TextWrapping="Wrap" Classes="detailText" />
+        <Button x:Name="CloseDetail" Classes="detailClose" Content="Close" Click="OnCloseDetailClicked" />
+      </StackPanel>
+    </Border>
+  </Grid>
+  <Window.Styles>
+    <Style Selector="Button.overlayCell">
+      <Setter Property="Width" Value="76" />
+      <Setter Property="Height" Value="70" />
+      <Setter Property="Padding" Value="10" />
+      <Setter Property="Background" Value="#F0171B23" />
+      <Setter Property="BorderBrush" Value="#FF344154" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.overlayCell:pointerover">
+      <Setter Property="Background" Value="#F0242B38" />
+      <Setter Property="BorderBrush" Value="#FF72A9FF" />
+    </Style>
+    <Style Selector="TextBlock.providerLabel">
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#FF9EACBF" />
+    </Style>
+    <Style Selector="TextBlock.providerValue">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#FFF1F5FA" />
+    </Style>
+    <Style Selector="TextBlock.detailTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#FFF1F5FA" />
+    </Style>
+    <Style Selector="TextBlock.detailText">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#FFBAC6D7" />
+    </Style>
+    <Style Selector="Button.detailClose">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Padding" Value="7,3" />
+    </Style>
+  </Window.Styles>
+</Window>

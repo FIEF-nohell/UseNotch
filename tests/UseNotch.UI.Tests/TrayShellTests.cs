@@ -18,7 +18,7 @@ public class TrayShellTests
 
         Assert.Null(menuItems["Status and settings"]);
         Assert.Null(menuItems["Quit"]);
-        Assert.Equal("False", menuItems["Show overlay"]);
+        Assert.Null(menuItems["Show overlay"]);
         Assert.Equal("False", menuItems["Pin overlay"]);
         Assert.Equal("False", menuItems["Refresh usage"]);
         Assert.Equal("False", menuItems["Pause monitoring"]);

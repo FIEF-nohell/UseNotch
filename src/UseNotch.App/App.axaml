@@ -14,7 +14,7 @@
           <NativeMenu>
             <NativeMenuItem Header="Status and settings" Click="OnShowSettingsClicked" />
             <NativeMenuItemSeparator />
-            <NativeMenuItem Header="Show overlay" IsEnabled="False" />
+            <NativeMenuItem Header="Show overlay" Click="OnToggleOverlayClicked" />
             <NativeMenuItem Header="Pin overlay" IsEnabled="False" />
             <NativeMenuItem Header="Refresh usage" IsEnabled="False" />
             <NativeMenuItem Header="Pause monitoring" IsEnabled="False" />

@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M02 tray and lifecycle complete. M00-M02 are complete; M03-M14 remain open.
+Status: M03 native overlay behavior gate is in progress. M00-M02 are complete; M04-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,17 +62,17 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M02 tray and lifecycle complete; overlay and providers are not implemented |
-| Active milestone | None; M03 is next |
+| Overall state | M03 native overlay behavior gate is in progress; providers are not implemented |
+| Active milestone | M03, native overlay prototype and Windows behavior gate |
 | Last completed milestone | M02 |
 | Last validated checkpoint | Completion commit `feat: add tray and app lifecycle (M02)`; M00 is `4d10e83`, M01 is `254447a`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | No pending M02 changes after its checkpoint commit |
-| Last verification | M02 Release build had zero warnings/errors; 17 tests passed; formatting and whitespace checks passed; native duplicate-launch, close-to-hide, and clean shutdown smoke passed on Windows build 26200 |
-| Next exact action | Begin M03 by reading the M02 checkpoint and implementing the static native overlay behavior gate |
+| Files currently changed | M03 overlay geometry, HWND behavior host, static overlay view, and validation harness are in progress |
+| Last verification | M03 Release build had zero warnings/errors; 24 solution tests passed; geometry tests covered all edges, work areas, negative coordinates, and DIP conversion; the independent-process overlay harness passed once at the current display configuration, proving transparent-corner click and wheel pass-through, visible-cell expansion, no foreground activation, and clean exit |
+| Next exact action | Run the overlay harness on 100%, 150%, and 200% DPI layouts, including a negative-coordinate secondary monitor, then record the Windows matrix before completing M03 |
 | Blocking condition | None. GitHub-hosted CI has not run because this task did not push; M03 native overlay and later provider/signing gates remain unverified |
-| Known implementation failures | None in M01 checks. Provider.Tests intentionally has no tests yet; no provider behavior or overlay behavior is claimed |
+| Known implementation failures | Provider.Tests intentionally has no tests yet. M03 is not complete: mixed-DPI and negative-coordinate interaction remain unverified. The test harness can lose its foreground-set request when the user changes foreground during an automated run; this is a Windows focus-policy limitation in the harness, not an accepted overlay result |
 | Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
 | Provider data accessed | Repository source, package metadata, and public documentation only; no live credentials or usage endpoints accessed |
 
@@ -111,6 +111,7 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 | M00 | 2026-09-07, Windows, user-created public repository on `main` | Verified root and initial commit `0dcc55d`; preserved local reference clone while removing its unconfigured gitlink from tracking; added ignore rules; made design references portable; validated document structure, links, checkbox state, whitespace, and credential-pattern scan. No application build/test claim. | `docs: establish implementation baseline (M00)` | Begin M01; no push or release publication performed |
 | M01 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Seven source and five test projects; pinned Avalonia 11.3.20/MVVM 8.4.2; locked restore and clean Release build passed with zero warnings/errors; 10 tests discovered and passed; `dotnet format --verify-no-changes` passed; `scripts/Test-DesktopLaunch.ps1` verified native title binding, non-elevated token, PerMonitorV2, and exit code 0. Public-repository/whitespace checks passed. See M01 evidence below. | `chore: scaffold solution and CI (M01)` | M02 tray/lifecycle. No remote push, hosted CI run, provider access, overlay claim, or release performed |
 | M02 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added explicit tray-owned lifetime, lazily reused Settings window, close-to-hide behavior, disabled future tray actions, and a same-user/session mutex plus 750 ms named-pipe activation or shutdown signal. The normal Settings surface can be requested by a later launch if the tray is unavailable. Release build had zero warnings/errors; 17 tests passed; formatting and whitespace checks passed. Native smoke verified hidden owner, bounded second launch, status window binding, non-elevation, PerMonitorV2, close-to-hide, and clean shutdown. | `feat: add tray and app lifecycle (M02)` | M03 native overlay gate. No Explorer restart was forced in this interactive development session; the tray host remains Avalonia-owned and a later launch remains the normal-window recovery path. No remote push or provider access performed |
+| M03 partial | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Implemented static OpenAI and Anthropic overlay cells, transparent borderless Avalonia window configuration, pure four-edge placement, monitor fallback, DPI conversion, native no-activate behavior, and bounded Win32 input regions. Added an independent-process input harness. Release build had zero warnings/errors; 24 solution tests passed; formatting and whitespace checks passed. One interactive native run proved transparent-corner click and wheel pass-through, visible-cell expansion without foreground activation, and clean exit. | `wip: add M03 overlay prototype` | Do not complete M03 yet. Validate the harness at 100%, 150%, and 200%, including an interactive negative-coordinate secondary monitor. The harness foreground request can be rejected by Windows when user interaction changes foreground during the run |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 

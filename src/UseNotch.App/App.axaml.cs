@@ -4,6 +4,9 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using UseNotch.App.Lifecycle;
+using UseNotch.App.Overlay;
+using UseNotch.App.Views;
+using UseNotch.Platform.Windows.Overlay;
 
 namespace UseNotch.App;
 
@@ -13,6 +16,7 @@ public partial class App : Avalonia.Application
     private static int _activationRequested;
     private static int _shutdownRequested;
     private AppLifecycleCoordinator? _lifecycleCoordinator;
+    private OverlayController? _overlayController;
 
     internal static void RequestActivation()
     {
@@ -46,6 +50,10 @@ public partial class App : Avalonia.Application
             _lifecycleCoordinator = new AppLifecycleCoordinator(
                 new MainWindowSettingsFactory(),
                 () => desktop.Shutdown());
+            _overlayController = new OverlayController(
+                new Win32MonitorService(),
+                new Win32OverlayWindowPlatform(),
+                () => new OverlayWindow());
 
             if (Interlocked.Exchange(ref _shutdownRequested, 0) == 1)
             {
@@ -54,6 +62,11 @@ public partial class App : Avalonia.Application
             else if (HasArgument("--show-status") || Interlocked.Exchange(ref _activationRequested, 0) == 1)
             {
                 _lifecycleCoordinator.ShowSettings();
+            }
+
+            if (HasArgument("--overlay-smoke"))
+            {
+                _overlayController.Show();
             }
         }
 
@@ -72,6 +85,8 @@ public partial class App : Avalonia.Application
 
     private void OnShowSettingsClicked(object? sender, EventArgs e) => ShowSettings();
 
+    private void OnToggleOverlayClicked(object? sender, EventArgs e) => _overlayController?.Toggle();
+
     private void OnQuitClicked(object? sender, EventArgs e)
     {
         SetTrayVisibility(false);
@@ -83,6 +98,8 @@ public partial class App : Avalonia.Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         SetTrayVisibility(false);
+        _overlayController?.Dispose();
+        _overlayController = null;
         _lifecycleCoordinator?.Dispose();
         _lifecycleCoordinator = null;
         _current = null;
