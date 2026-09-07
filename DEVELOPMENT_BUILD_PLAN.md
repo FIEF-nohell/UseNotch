@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M03 native overlay behavior gate is in progress. M00-M02 are complete; M04-M14 remain open.
+Status: M03 native overlay behavior gate is in progress. M00-M02 and M04-M05 are complete; M06-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,15 +62,15 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M03 native overlay behavior gate is in progress; providers are not implemented |
-| Active milestone | M05, polling, concurrency, and durable cache foundation; M03 DPI gate remains explicitly open |
-| Last completed milestone | M04 |
-| Last validated checkpoint | M04 completion commit `feat: add domain and mock scenarios (M04)`; M00 is `4d10e83`, M01 is `254447a`, M02 is `c15d86a`. |
+| Overall state | M05 polling and durable cache foundation complete; M03 native overlay DPI gate remains explicitly open |
+| Active milestone | M06, OpenAI / Codex usage integration |
+| Last completed milestone | M05 |
+| Last validated checkpoint | M05 completion commit `feat: add polling and state persistence (M05)`; M00 is `4d10e83`, M01 is `254447a`, M02 is `c15d86a`, M04 is `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | M05 generation-aware state store, per-provider polling coordinator, cancellation budgets, and tests are in progress |
-| Last verification | M04 completion passed and was pushed at `9fd1928`. M05 Application tests pass 28/28, including generation rejection, one in-flight read coalescing, provider-isolated disconnect, cancellation, and awaited shutdown. Formatting and diff whitespace checks pass. M03 remains validated only at 100% plus the negative-coordinate monitor run |
-| Next exact action | Add atomic versioned JSON cache, persisted backoff deadlines, Retry-After parsing, and corruption recovery tests for M05 |
+| Files currently changed | M05 implementation and ledger are ready for the M05 completion commit; no provider credentials or raw account data are present |
+| Last verification | Locked restore passed. Release build passed with zero warnings/errors. Test discovery found 72 executable tests across Domain, Application, Windows, and UI projects; all 72 passed. Provider.Tests has no tests by design. Formatting verification and `git diff --check` passed. M03 remains validated only at 100% plus the negative-coordinate monitor run |
+| Next exact action | Create and push `feat: add polling and state persistence (M05)`, then begin M06 source discovery and supported OpenAI / Codex fixtures |
 | Blocking condition | M03 remains open because this interactive session exposes all monitors at 100%, and per-monitor registry edits did not affect new processes without sign-out. The user requested continuing with M04 before this gate is rerun |
 | Known implementation failures | Provider.Tests intentionally has no tests yet. No known overlay code failure remains at the tested 100% layouts. The harness can lose its foreground-set request when the user changes foreground during an automated run; this is a Windows focus-policy limitation in the harness, not an accepted overlay result |
 | Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
@@ -114,7 +114,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 | M03 partial | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Implemented static OpenAI and Anthropic overlay cells, transparent borderless Avalonia window configuration, pure four-edge placement, monitor fallback, DPI conversion, native no-activate behavior, and bounded Win32 input regions. Added an independent-process input harness. Release build had zero warnings/errors; 24 solution tests passed; formatting and whitespace checks passed. One interactive native run proved transparent-corner click and wheel pass-through, visible-cell expansion without foreground activation, and clean exit. | `wip: add M03 overlay prototype` | Do not complete M03 yet. Validate the harness at 100%, 150%, and 200%, including an interactive negative-coordinate secondary monitor. The harness foreground request can be rejected by Windows when user interaction changes foreground during the run |
 | M03 partial continuation | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Fixed the initial layout race by applying native input regions after `UpdateLayout` and a render-priority refresh. `pwsh -NoProfile -File scripts/Test-OverlayBehavior.ps1` passed at 100% on the primary monitor. `pwsh -NoProfile -File scripts/Test-OverlayBehavior.ps1 -NegativeMonitor` passed on the selected secondary monitor at negative coordinates `(-913,-1440)`, with overlay bounds `1387,-830 260x220`. Both runs preserved foreground focus, passed transparent corner click and wheel input, expanded the visible cell, and exited cleanly. | Uncommitted M03 continuation | 150% and 200% could not be honestly run: all three monitors reported 96 DPI, and changing `PerMonitorSettings\DpiValue` did not affect new processes without signing out. The original per-monitor values were restored. Next action is an actual sign-out-based DPI matrix, then M03 completion commit and push if both pass |
 | M04 | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added immutable domain models, two-provider registry, deterministic network-free fixtures for every required auth/quota/activity state, stable headline and reset-passed semantics, over-limit display clamping, explicit source fidelity, real overlay bindings for both provider cells, and an explicit `--mock-scenario=` development selector. Production has no implicit mock fallback. Release build passed with zero warnings/errors, 23 Application tests, 5 Domain tests, 11 Windows tests, and 8 UI tests passed, formatting passed, and `git diff --check` passed. | `feat: add domain and mock scenarios (M04)` | M03 150% and 200% remain intentionally deferred per the user's instruction. Begin M05 |
-| M05 partial | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added generation-aware `InMemoryUsageStateStore`, provider-isolated disconnect/clear semantics, `IUiDispatcher`, polling options with 15-second attempt and 35-second operation budgets, one worker per provider, refresh coalescing, pause/resume handling, cancellation, and awaited shutdown. Application tests pass 28/28; formatting and diff whitespace checks pass. | Uncommitted M05 continuation | Atomic JSON cache, persisted backoff, Retry-After parsing, transient/schema retry policy, freshness/cache labels, and full solution verification remain. M03 DPI gate remains deferred |
+| M05 partial | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Initial state-store and polling implementation checkpoint. | `wip: start M05 polling state` | Continued into the M05 completion checkpoint below |
+| M05 | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added one independent worker per enabled provider, one in-flight operation per worker, coalesced refresh triggers, active and idle cadence control, linked 15-second attempt and 35-second operation budgets, transient and schema backoff with persisted next-attempt status, generation-safe publication, disconnect/pause/disabled-provider behavior, atomic versioned sanitized JSON cache, corruption/old/future schema recovery, disk-write recovery, cached-startup origin labeling, freshness normalization, reset-passed and expired-headline suppression, UI dispatch of normalized states, safe shutdown, and late-response suppression after disconnect or source rotation. Locked restore passed. Release build passed with zero warnings/errors. Test discovery found 72 executable tests and all 72 passed: Application 48, Domain 5, Windows 11, UI 8. Provider.Tests remains an intentional zero-test scaffold. Formatting verification and `git diff --check` passed. | `feat: add polling and state persistence (M05)` | M03 remains user-deferred and is not part of active work. Begin M06 |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
@@ -144,7 +145,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M02: Avalonia shell, tray, and application lifecycle.
 - [ ] M03: Native overlay prototype and Windows behavior gate.
 - [x] M04: Shared domain, mock provider, and complete state fixtures.
-- [ ] M05: Polling, concurrency, state store, and JSON cache.
+- [x] M05: Polling, concurrency, state store, and JSON cache.
 - [ ] M06: OpenAI / Codex usage integration.
 - [ ] M07: Anthropic / Claude Code usage integration.
 - [ ] M08: Conservative local activity monitoring.
@@ -303,17 +304,17 @@ Objective: establish scheduling and state guarantees before reading real credent
 
 Areas: polling coordinator, state store, TimeProvider use, UI dispatcher, JSON settings/cache/backoff repositories.
 
-- [ ] Run one worker and one in-flight quota operation per provider; allow the two providers to run independently.
-- [ ] Use 60-second active and five-minute idle/unknown polling, with bounded coalesced manual/resume/source-change refreshes.
-- [ ] Implement 15-second HTTP attempt and 35-second total-operation budgets, linked cancellation, and one owned retry policy.
-- [ ] Persist 429 deadlines; local exponential delay starts at 60 seconds and caps at 15 minutes, while a longer server deadline always wins.
-- [ ] Add bounded transient retries, schema-failure cooldown, and clear next-attempt reporting.
-- [ ] Reject results with obsolete connection, credential, or account generations before UI publication and persistence.
-- [ ] Implement disconnect clearing, pause behavior, and zero reads for disabled providers.
-- [ ] Store sanitized last-good data atomically with schema versions and recovery behavior. Store no tokens or raw payloads.
-- [ ] Implement freshness, cached-startup labeling, reset-passed handling, and compact-value expiry exactly as defined in the design.
-- [ ] Marshal only normalized updates to the UI thread; bound/coalesce updates.
-- [ ] Cancel and await owned work at shutdown without synchronous UI-thread waits.
+- [x] Run one worker and one in-flight quota operation per provider; allow the two providers to run independently.
+- [x] Use 60-second active and five-minute idle/unknown polling, with bounded coalesced manual/resume/source-change refreshes.
+- [x] Implement 15-second HTTP attempt and 35-second total-operation budgets, linked cancellation, and one owned retry policy.
+- [x] Persist 429 deadlines; local exponential delay starts at 60 seconds and caps at 15 minutes, while a longer server deadline always wins.
+- [x] Add bounded transient retries, schema-failure cooldown, and clear next-attempt reporting.
+- [x] Reject results with obsolete connection, credential, or account generations before UI publication and persistence.
+- [x] Implement disconnect clearing, pause behavior, and zero reads for disabled providers.
+- [x] Store sanitized last-good data atomically with schema versions and recovery behavior. Store no tokens or raw payloads.
+- [x] Implement freshness, cached-startup labeling, reset-passed handling, and compact-value expiry exactly as defined in the design.
+- [x] Marshal only normalized updates to the UI thread; bound/coalesce updates.
+- [x] Cancel and await owned work at shutdown without synchronous UI-thread waits.
 
 Acceptance: delayed requests cannot resurrect disconnected state; repeated triggers do not duplicate requests; restart preserves backoff; corrupted cache does not crash the tray app.
 

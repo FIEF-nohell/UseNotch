@@ -3,6 +3,7 @@ using UseNotch.Domain;
 namespace UseNotch.Application;
 
 public enum RefreshReason { Timer, Manual, Resume, SourceChanged }
+public enum StateOrigin { Live, CachedStartup }
 
 public sealed record ProviderRuntimeState(
     ProviderConnection Connection,
@@ -11,6 +12,7 @@ public sealed record ProviderRuntimeState(
     long CredentialGeneration,
     long AccountGeneration)
 {
+    public StateOrigin Origin { get; init; } = StateOrigin.Live;
     public ProviderRuntimeState ForConnection(ProviderConnection connection) => this with { Connection = connection };
 }
 
@@ -98,7 +100,10 @@ public sealed class PollingCoordinator : IAsyncDisposable
     private readonly IReadOnlyDictionary<ProviderId, IUsageProvider> _providers;
     private readonly IUsageStateStore _store;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IUsageCache? _cache;
     private readonly PollingOptions _options;
+    private readonly TimeProvider _timeProvider;
+    private readonly Action<ProviderRuntimeState>? _onPublished;
     private readonly object _gate = new();
     private readonly Dictionary<ProviderId, Worker> _workers = [];
     private bool _paused;
@@ -108,12 +113,44 @@ public sealed class PollingCoordinator : IAsyncDisposable
         IEnumerable<IUsageProvider> providers,
         IUsageStateStore store,
         IUiDispatcher? dispatcher = null,
-        PollingOptions? options = null)
+        PollingOptions? options = null,
+        IUsageCache? cache = null,
+        TimeProvider? timeProvider = null,
+        Action<ProviderRuntimeState>? onPublished = null)
     {
         _providers = providers.ToDictionary(provider => provider.Provider);
         _store = store;
         _dispatcher = dispatcher ?? new InlineUiDispatcher();
         _options = options ?? PollingOptions.Default;
+        _cache = cache;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _onPublished = onPublished;
+    }
+
+    public async Task StartAsync(ProviderConnection connection, CancellationToken cancellationToken = default)
+    {
+        if (!connection.Enabled)
+        {
+            return;
+        }
+
+        if (_cache is not null)
+        {
+            var cached = await _cache.LoadAsync(connection.Provider, cancellationToken);
+            if (cached is not null && cached.Connection.Provider == connection.Provider)
+            {
+                var restored = FreshnessPolicy.Normalize(cached.ForConnection(connection), _timeProvider.GetUtcNow());
+                restored = restored with
+                {
+                    Origin = StateOrigin.CachedStartup,
+                    Status = restored.Status.Freshness == DataFreshness.Expired
+                        ? restored.Status
+                        : restored.Status with { Freshness = DataFreshness.Stale }
+                };
+                _store.TryPublish(restored);
+            }
+        }
+        Start(connection);
     }
 
     public void Start(ProviderConnection connection)
@@ -124,6 +161,11 @@ public sealed class PollingCoordinator : IAsyncDisposable
             if (!_providers.ContainsKey(connection.Provider))
             {
                 throw new InvalidOperationException($"No provider registered for {connection.Provider}.");
+            }
+
+            if (!connection.Enabled)
+            {
+                return;
             }
 
             if (_workers.ContainsKey(connection.Provider))
@@ -144,6 +186,17 @@ public sealed class PollingCoordinator : IAsyncDisposable
             if (!_paused && _workers.TryGetValue(provider, out var worker))
             {
                 worker.Request(reason);
+            }
+        }
+    }
+
+    public void SetIdle(ProviderId provider, bool idle)
+    {
+        lock (_gate)
+        {
+            if (_workers.TryGetValue(provider, out var worker))
+            {
+                worker.SetIdle(idle);
             }
         }
     }
@@ -174,6 +227,10 @@ public sealed class PollingCoordinator : IAsyncDisposable
         }
 
         _store.Disconnect(provider);
+        if (_cache is not null)
+        {
+            await _cache.ClearAsync(provider, CancellationToken.None);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -206,12 +263,17 @@ public sealed class PollingCoordinator : IAsyncDisposable
         private Task? _loop;
         private bool _requested;
         private bool _paused;
+        private int _transientFailures;
+        private int _schemaFailures;
+        private bool _idle;
 
         public Worker(PollingCoordinator owner, ProviderConnection connection)
         {
             _owner = owner;
             _connection = connection;
         }
+
+        public ProviderId Provider => _connection.Provider;
 
         public void Start() => _loop = Task.Run(RunAsync);
 
@@ -239,6 +301,14 @@ public sealed class PollingCoordinator : IAsyncDisposable
             if (!paused)
             {
                 Request(RefreshReason.Resume);
+            }
+        }
+
+        public void SetIdle(bool idle)
+        {
+            lock (_gate)
+            {
+                _idle = idle;
             }
         }
 
@@ -272,12 +342,50 @@ public sealed class PollingCoordinator : IAsyncDisposable
                         continue;
                     }
 
-                    await ReadOnceAsync();
-                    await Task.Delay(_owner._options.ActiveInterval, _stop.Token);
+                    try
+                    {
+                        await ReadOnceAsync();
+                        _transientFailures = 0;
+                        _schemaFailures = 0;
+                        await Task.Delay(Interval, _owner._timeProvider, _stop.Token);
+                    }
+                    catch (ProviderReadException exception)
+                    {
+                        var now = _owner._timeProvider.GetUtcNow();
+                        DateTimeOffset? nextAttempt = exception.IsSchemaFailure
+                            ? BackoffPolicy.SchemaNextAttempt(now, ++_schemaFailures)
+                            : exception.IsTransient
+                                ? BackoffPolicy.NextAttempt(now, ++_transientFailures, exception.ServerDeadline)
+                                : null;
+                        await PublishFailureAsync(exception, now, nextAttempt);
+                        if (nextAttempt is { } deadline)
+                        {
+                            var delay = deadline - _owner._timeProvider.GetUtcNow();
+                            if (delay > TimeSpan.Zero)
+                            {
+                                await Task.Delay(delay, _owner._timeProvider, _stop.Token);
+                            }
+                        }
+                        if (nextAttempt is null)
+                        {
+                            continue;
+                        }
+                    }
                     Request(RefreshReason.Timer);
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+        }
+
+        private TimeSpan Interval
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _idle ? _owner._options.IdleInterval : _owner._options.ActiveInterval;
+                }
+            }
         }
 
         private async Task ReadOnceAsync()
@@ -286,8 +394,25 @@ public sealed class PollingCoordinator : IAsyncDisposable
             operation.CancelAfter(_owner._options.OperationBudget);
             using var attempt = CancellationTokenSource.CreateLinkedTokenSource(operation.Token);
             attempt.CancelAfter(_owner._options.AttemptBudget);
-            var snapshot = await _owner._providers[_connection.Provider].ReadAsync(_connection, attempt.Token);
+            UsageSnapshot? snapshot;
+            try
+            {
+                snapshot = await _owner._providers[_connection.Provider].ReadAsync(_connection, attempt.Token);
+            }
+            catch (ProviderReadException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (!_stop.IsCancellationRequested)
+            {
+                throw new ProviderReadException("Provider attempt timed out.", true);
+            }
             if (snapshot is null)
+            {
+                return;
+            }
+
+            if (!_owner.IsCurrent(this))
             {
                 return;
             }
@@ -296,13 +421,59 @@ public sealed class PollingCoordinator : IAsyncDisposable
             var candidate = new ProviderRuntimeState(
                 _connection,
                 snapshot,
-                new ProviderStatus(AuthenticationState.Authenticated, DataFreshness.Fresh, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, false, null),
+                new ProviderStatus(AuthenticationState.Authenticated, DataFreshness.Fresh, _owner._timeProvider.GetUtcNow(), _owner._timeProvider.GetUtcNow(), null, false, null),
+                current?.CredentialGeneration ?? 0,
+                current?.AccountGeneration ?? 0);
+            candidate = FreshnessPolicy.Normalize(candidate, _owner._timeProvider.GetUtcNow());
+            if (_owner.IsCurrent(this) && _owner._store.TryPublish(candidate))
+            {
+                if (_owner._cache is not null)
+                {
+                    await _owner._cache.SaveAsync(candidate, _stop.Token);
+                }
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token);
+            }
+        }
+
+        private async Task PublishFailureAsync(ProviderReadException exception, DateTimeOffset now, DateTimeOffset? nextAttempt)
+        {
+            if (!_owner.IsCurrent(this))
+            {
+                return;
+            }
+
+            var current = _owner._store.Get(_connection.Provider);
+            var lastSuccess = current?.Status.LastSuccess;
+            var status = new ProviderStatus(
+                current?.Status.Authentication ?? AuthenticationState.Discovering,
+                lastSuccess is { } success ? FreshnessPolicy.Evaluate(success, now) : DataFreshness.Unknown,
+                now,
+                lastSuccess,
+                nextAttempt,
+                false,
+                new ErrorState(exception.Category, exception.IsTransient && !exception.IsSchemaFailure, exception.SafeMessage, exception.Code, nextAttempt));
+            var candidate = new ProviderRuntimeState(
+                _connection,
+                current?.Snapshot,
+                status,
                 current?.CredentialGeneration ?? 0,
                 current?.AccountGeneration ?? 0);
             if (_owner._store.TryPublish(candidate))
             {
-                await _owner._dispatcher.DispatchAsync(() => { }, _stop.Token);
+                if (_owner._cache is not null)
+                {
+                    await _owner._cache.SaveAsync(candidate, _stop.Token);
+                }
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token);
             }
+        }
+    }
+
+    private bool IsCurrent(Worker worker)
+    {
+        lock (_gate)
+        {
+            return !_disposed && _workers.TryGetValue(worker.Provider, out var current) && ReferenceEquals(current, worker);
         }
     }
 }
