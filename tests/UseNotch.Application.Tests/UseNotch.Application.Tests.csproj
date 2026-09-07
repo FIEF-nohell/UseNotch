@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../../src/UseNotch.Application/UseNotch.Application.csproj" />
+    <ProjectReference Include="../../src/UseNotch.Infrastructure/UseNotch.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

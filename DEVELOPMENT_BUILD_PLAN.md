@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M00-M08 are complete. M09-M14 remain open.
+Status: M00-M09 are complete. M10-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,15 +62,15 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M00-M08 are complete. Quota is live-verified against both real provider accounts, and activity monitoring is implemented against the real Claude Code session records and the real Codex state database |
-| Active milestone | M09, settings, privacy, source selection, and startup |
-| Last completed milestone | M08, conservative local activity monitoring |
+| Overall state | M00-M09 are complete. Saved settings now drive what the application runs, and the settings, privacy, startup, and secret-storage behavior was verified non-elevated |
+| Active milestone | M10, overlay polish, detailed status, and accessibility |
+| Last completed milestone | M09, settings, privacy, source selection, and startup |
 | Last validated checkpoint | Provider integration checkpoint `637d397` (`chore: checkpoint M07 provider integration`); Codex alternate-schema fix `655ad2f`; overlay regression fix `1203d52`; M06 synthetic checkpoint `929716a`; M05 `5586660`; M00 `4d10e83`; M01 `254447a`; M02 `c15d86a`; M04 `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | The Windows worktree `C:\Users\Noel Hermann\Projects\UseNotch`. The previous session's Linux-side changes were rebuilt and re-tested here and hold |
-| Files currently changed | Committed in the M08 completion commit. No provider credentials or raw account data are present in the repository |
-| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 11/11, Provider 75/75, UI 9/9, Application 66/66, 166 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `scripts/Test-LiveProviderSlice.ps1` still passes both phases with the activity workers running |
-| Next exact action | Begin M09, following its task list in section 4 |
+| Files currently changed | Committed in the M09 completion commit. No provider credentials or raw account data are present in the repository |
+| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 23/23, Provider 75/75, UI 22/22, Application 88/88, 213 total. `dotnet format --verify-no-changes` and `git diff --check` passed. A non-elevated application run confirmed that saved settings start both providers with no command-line switch, that the secrets directory grants access only to the current user with inheritance removed, and that shutdown stays clean |
+| Next exact action | Begin M10, following its task list in section 4 |
 | Blocking condition | None |
 | Known implementation failures | None outstanding. The overlay harness can still lose its foreground-set request when the user changes foreground during an automated run, which is a Windows focus-policy limitation of the harness rather than an overlay result |
 | Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts, as is the `.tmp\hang.dmp` capture used to diagnose the earlier shutdown deadlock |
@@ -129,6 +129,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 
 | M08 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added activity monitoring as its own layer with its own workers. Inspected the real sources first: Claude Code 2.1.263 writes per-session records under `<ClaudeRoot>\sessions` carrying `pid`, `sessionId`, `procStart` as a Windows FILETIME string, `status`, and millisecond timestamps, while `<CodexRoot>\state_5.sqlite` holds a WAL-mode `threads` table whose `updated_at` is Unix seconds. The Claude monitor maps only recognized statuses, verifies each process by id and creation time, drops ended sessions, downgrades access-denied inspection to an estimate, and never carries a working directory, session name, socket path, or raw session id past the parser. The Codex monitor probes the schema before querying, opens the database read-only with a private cache and a 250 ms busy timeout, caps the query at eight rows, follows a record-supplied rollout path only when it resolves inside the Codex root and then reads only its metadata, and reports estimated recent activity or nothing at all, never idle or waiting. A `FileSystemWatcher` with a 150 ms debounce makes supported changes prompt, a watcher error requests a full pass, and a session lock pauses both coordinators. Added `Microsoft.Data.Sqlite` 10.0.11 and `Microsoft.Win32.SystemEvents` 8.0.0 with updated lock files; the audit-blocked SQLitePCLRaw versions are avoided by the 10.0.11 line. Locked restore, zero-warning Release build, 166 solution tests (Domain 5, Windows 11, Provider 75, UI 9, Application 66), `dotnet format --verify-no-changes`, and `git diff --check` passed. Ran both monitors against the live machine: Claude reported one working session as provider-reported, confirming the FILETIME comparison matches a real process, and Codex reported a supported source with no recent activity while it was not running. The live quota slice still passes with the activity workers running, and the quota cache contains no activity. | `feat: add conservative activity monitoring (M08)` | Begin M09. A Codex working state was observed only through synthetic fixtures, since Codex was not running during this session; the Claude path was confirmed live |
 
+| M09 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added the real settings surface and the security behavior behind it. Settings live in one validated JSON document under the known local application data folder, written through a temporary file and an atomic replace, migrated when the schema version is older, and preserved as `settings.json.invalid` beside recovered defaults when unreadable. Validation fixed a real defect found by its own test: a relative selected root was silently resolved against the process working directory, so a root must now already be absolute or it is dropped. The settings window carries the documented Status, Providers, Appearance, General, Privacy, and About navigation, shows each provider's resolved source, quota scope, authentication state, freshness, activity, and a recovery action that always points at the owning tool, and offers enable, disable, reconnect, pause, clear-data, and a manual refresh rate limited to one attempt per 15 seconds. Launch at login writes only the current user's Run key and always reports the registration that actually exists, including one that points somewhere else. `DpapiSecretStore` protects app-owned material with the current-user scope, proven by a machine-scope reader failing to open it, and the secrets directory is created with inheritance removed and access granted only to the current user. Diagnostics are opt-in, sanitized of tokens, JWTs, bearer headers, email addresses, and local paths, truncated, newline-safe, and size-capped; no code path writes a raw token or response body. Saved settings now decide which providers run, with the command-line switches kept as development overrides. Locked restore, zero-warning Release build, 213 solution tests (Domain 5, Windows 23, Provider 75, UI 22, Application 88), `dotnet format --verify-no-changes`, and `git diff --check` passed. A non-elevated run started both providers from saved settings with no switch, wrote both cache files, produced a secrets directory whose only access entry is this user, and exited cleanly. | `feat: add settings and privacy controls (M09)` | Begin M10. The settings document is written only once the user changes something, so a first run legitimately leaves no `settings.json` behind |
+
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
 ### Decisions and deviations log
@@ -145,6 +147,9 @@ Use milestone IDs as checkpoint references until a short hash can be recorded in
 | 2026-09-07 | Process DPI awareness is established by the manifest; Avalonia owns scaling | Native startup confirmed PerMonitorV2. M03 must coordinate window placement without a competing process-wide DPI setter |
 | 2026-09-07 | No upstream source files or visual assets copied in M01 | Foundation uses normal framework wiring informed by the references; no upstream source notice is required for a copied file at this stage. Preserve notices when later adapting source |
 | 2026-09-07 | Use an ICO for the Win32 tray asset | Avalonia's Win32 tray host rejects SVG icon data at startup. Reused the existing Avalonia foundation's raster app icon after checking that project for a license or notice file and finding none. Replace it with finalized UseNotch branding before release |
+| 2026-09-07 | Launch at login uses the current user's `Run` registry value rather than a Startup-folder shortcut | A shortcut needs `IShellLink` COM interop for no functional gain. The Run value is per-user, needs no elevation, and can be read back exactly, which the milestone requires |
+| 2026-09-07 | Added `Microsoft.Data.Sqlite` 10.0.11, `Microsoft.Win32.SystemEvents` 8.0.0, and `System.Security.Cryptography.ProtectedData` 8.0.0 | Read-only activity queries, session lock notifications, and current-user DPAPI. The 10.0.11 SQLite line was chosen because earlier lines resolve SQLitePCLRaw versions that the repository's dependency audit blocks |
+| 2026-09-07 | Saved settings decide which providers run; the `--enable-codex` and `--enable-claude` switches remain as development overrides | Settings became the real configuration surface in M09. Keeping the switches avoids changing a user's stored configuration during a development or smoke run |
 
 Add dated entries for dependency upgrades, platform limitations, changed provider contracts, and scope changes. Update both plans if a product or architecture decision changes. Do not silently replace requirements with easier behavior.
 
@@ -161,7 +166,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M06: OpenAI / Codex usage integration.
 - [x] M07: Anthropic / Claude Code usage integration.
 - [x] M08: Conservative local activity monitoring.
-- [ ] M09: Settings, privacy, source selection, and startup.
+- [x] M09: Settings, privacy, source selection, and startup.
 - [ ] M10: Overlay polish, detailed status, and accessibility.
 - [ ] M11: MVP cache verification and explicit history deferral.
 - [ ] M12: WiX packaging and build/release pipeline validation.
@@ -417,15 +422,15 @@ Objective: make connection, recovery, placement, and privacy manageable without 
 
 Areas: settings/status windows, provider configuration, JSON migration, known folders, DPAPI service, startup integration, diagnostics.
 
-- [ ] Implement Status, Providers, Appearance, General, Privacy, and About navigation with aligned compact controls.
-- [ ] Show the selected credential source, supported quota scope, authentication state, and safe recovery action for each provider.
-- [ ] Add enabled/disabled, pause, manual refresh, clear-cache, and reconnect behavior with accurate command labels.
-- [ ] Add monitor, edge, offset, pin, visibility, UI scale, reduced-motion, and full-screen visibility preferences.
-- [ ] Add opt-in per-user Startup shortcut registration; read back actual registration state and handle failure honestly.
-- [ ] Use known local folders, atomic writes, migration/recovery, and appropriate ACLs for app-owned data.
-- [ ] Implement current-user DPAPI for any app-owned partition secret; no borrowed token persistence.
-- [ ] Add sanitized diagnostics and bounded logs; provide no raw token/body dump option.
-- [ ] Verify all settings and security behavior under a standard user account.
+- [x] Implement Status, Providers, Appearance, General, Privacy, and About navigation with aligned compact controls. The settings window uses a compact left navigation column with aligned rows and dividers rather than oversized cards.
+- [x] Show the selected credential source, supported quota scope, authentication state, and safe recovery action for each provider. The resolved root is shown rather than assumed, because a terminal's environment can differ from the one a tray application inherits.
+- [x] Add enabled/disabled, pause, manual refresh, clear-cache, and reconnect behavior with accurate command labels. Manual refresh is rate limited to one attempt per 15 seconds and the button says how long the wait is; disabling a provider disconnects it rather than leaving a stale reading on screen.
+- [x] Add monitor, edge, offset, pin, visibility, UI scale, reduced-motion, and full-screen visibility preferences. Each is validated on load and on save, so one bad value falls back to its default instead of discarding the document.
+- [x] Add opt-in per-user Startup shortcut registration; read back actual registration state and handle failure honestly. Registration writes only the current user's Run key, the state is always read back from the registry, and a registration pointing at another location is reported as such rather than shown as this installation's.
+- [x] Use known local folders, atomic writes, migration/recovery, and appropriate ACLs for app-owned data. Paths resolve through the known local application data folder, settings are written through a temporary file and an atomic replace, an older schema is migrated, an unreadable document is preserved as `settings.json.invalid` beside recovered defaults, and the secrets directory is created with inheritance removed and access granted only to the current user.
+- [x] Implement current-user DPAPI for any app-owned partition secret; no borrowed token persistence. `DpapiSecretStore` protects with `DataProtectionScope.CurrentUser`, and a test proves a machine-scope reader cannot open the result. No borrowed provider token is ever passed to this store.
+- [x] Add sanitized diagnostics and bounded logs; provide no raw token/body dump option. Diagnostics are off until the user enables them, every line is stripped of tokens, JWTs, bearer headers, email addresses, and local paths, newlines cannot forge entries, lines are truncated, and the file is capped with at most one rolled-over predecessor. No code path anywhere writes a raw token or response body.
+- [x] Verify all settings and security behavior under a standard user account. All checks in this milestone ran non-elevated, confirmed by the session's own elevation check, including the registry registration, the DPAPI round trip, the restricted-directory ACL, and a full application run.
 
 Acceptance: valid settings survive restart; disconnect stops file/network access; clear-data scope is limited to UseNotch; launch-at-login is opt-in; recovery guidance never silently modifies an owning tool.
 

@@ -10,8 +10,11 @@ using UseNotch.App.ViewModels;
 using UseNotch.App.Views;
 using UseNotch.Application;
 using UseNotch.Domain;
+using UseNotch.Infrastructure;
 using UseNotch.Platform.Windows.Overlay;
+using UseNotch.Platform.Windows.Security;
 using UseNotch.Platform.Windows.Session;
+using UseNotch.Platform.Windows.Startup;
 using UseNotch.Providers.Anthropic;
 using UseNotch.Providers.OpenAI;
 
@@ -27,6 +30,10 @@ public partial class App : Avalonia.Application
     private PollingCoordinator? _pollingCoordinator;
     private ActivityCoordinator? _activityCoordinator;
     private SessionLockWatcher? _sessionLockWatcher;
+    private readonly InMemoryUsageStateStore _store = new();
+    private readonly JsonSettingsRepository _settingsRepository = new();
+    private readonly RegistryStartupRegistration _startupRegistration = new();
+    private readonly SanitizedDiagnosticLog _diagnostics = new();
     private readonly OverlayViewModel _overlayViewModel = new();
     private static readonly TimeSpan ShutdownBudget = TimeSpan.FromSeconds(5);
 
@@ -60,7 +67,7 @@ public partial class App : Avalonia.Application
             desktop.Exit += OnDesktopExit;
             _current = this;
             _lifecycleCoordinator = new AppLifecycleCoordinator(
-                new MainWindowSettingsFactory(),
+                new MainWindowSettingsFactory(CreateSettingsViewModel),
                 () => desktop.Shutdown());
             _overlayController = new OverlayController(
                 new Win32MonitorService(),
@@ -97,14 +104,7 @@ public partial class App : Avalonia.Application
                 _overlayController.Show();
             }
 
-            var enableCodex = HasArgument("--enable-codex");
-            var enableClaude = HasArgument("--enable-claude");
-            if (enableCodex || enableClaude)
-            {
-                StartProviderPolling(enableCodex, enableClaude);
-                _overlayController.Show();
-            }
-
+            _ = StartFromSettingsAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -164,11 +164,58 @@ public partial class App : Avalonia.Application
         _current = null;
     }
 
+    private SettingsViewModel CreateSettingsViewModel() => new(
+        _settingsRepository,
+        _startupRegistration,
+        new AppSettingsRuntime(_store, _pollingCoordinator, _activityCoordinator, ApplyOverlaySettings));
+
+    private void ApplyOverlaySettings(OverlaySettings settings)
+    {
+        if (_overlayController is null || settings is null)
+        {
+            return;
+        }
+
+        _overlayController.PreferredMonitorId = settings.MonitorId;
+        if (settings.Visible)
+        {
+            _overlayController.Show();
+        }
+        else
+        {
+            _overlayController.Hide();
+        }
+    }
+
     private static bool HasArgument(string expectedArgument) =>
         Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
 
-    private void StartProviderPolling(bool enableCodex, bool enableClaude)
+    /// <summary>
+    /// Saved settings decide what runs. The command-line switches remain available so a development run
+    /// can force a provider on without changing the user's stored configuration.
+    /// </summary>
+    private async Task StartFromSettingsAsync()
+    {
+        // App-owned secret storage is created with inheritance removed before anything can write to it.
+        OwnedDataDirectory.CreateRestricted(ApplicationPaths.Secrets);
+
+        var loaded = await _settingsRepository.LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        var settings = loaded.Settings;
+        _diagnostics.IsEnabled = settings.Privacy.DiagnosticsEnabled;
+
+        var enableCodex = settings.OpenAi.Enabled || HasArgument("--enable-codex");
+        var enableClaude = settings.Anthropic.Enabled || HasArgument("--enable-claude");
+        if (!enableCodex && !enableClaude)
+        {
+            return;
+        }
+
+        StartProviderPolling(enableCodex, enableClaude, settings.Privacy.ActivityMonitoringEnabled);
+        ApplyOverlaySettings(settings.Overlay);
+    }
+
+    private void StartProviderPolling(bool enableCodex, bool enableClaude, bool enableActivity)
     {
         var cacheRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -179,19 +226,24 @@ public partial class App : Avalonia.Application
         if (enableCodex)
         {
             providers.Add(new CodexUsageProvider());
-            monitors.Add(new CodexActivityMonitor());
+            if (enableActivity)
+            {
+                monitors.Add(new CodexActivityMonitor());
+            }
         }
 
         if (enableClaude)
         {
             providers.Add(new ClaudeUsageProvider());
-            monitors.Add(new ClaudeActivityMonitor());
+            if (enableActivity)
+            {
+                monitors.Add(new ClaudeActivityMonitor());
+            }
         }
 
-        var store = new InMemoryUsageStateStore();
         _pollingCoordinator = new PollingCoordinator(
             providers,
-            store,
+            _store,
             cache: new JsonUsageCache(cacheRoot),
             onPublished: state => Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(state)));
 
@@ -199,10 +251,10 @@ public partial class App : Avalonia.Application
         // source can never delay or break a quota reading.
         _activityCoordinator = new ActivityCoordinator(
             monitors,
-            store,
+            _store,
             onPublished: provider =>
             {
-                if (store.Get(provider) is { } current)
+                if (_store.Get(provider) is { } current)
                 {
                     Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(current));
                 }
@@ -219,13 +271,19 @@ public partial class App : Avalonia.Application
         if (enableCodex)
         {
             _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "codex:default", true, 1));
-            _activityCoordinator.Start(ProviderId.OpenAi);
+            if (enableActivity)
+            {
+                _activityCoordinator.Start(ProviderId.OpenAi);
+            }
         }
 
         if (enableClaude)
         {
             _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.Anthropic, "claude:default", true, 1));
-            _activityCoordinator.Start(ProviderId.Anthropic);
+            if (enableActivity)
+            {
+                _activityCoordinator.Start(ProviderId.Anthropic);
+            }
         }
     }
 

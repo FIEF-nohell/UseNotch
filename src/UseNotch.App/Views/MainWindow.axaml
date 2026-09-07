@@ -1,52 +1,187 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UseNotch.App.ViewModels"
+        xmlns:app="using:UseNotch.Application"
         x:Class="UseNotch.App.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Title="{Binding Title}"
-        Width="520" Height="310"
-        MinWidth="420" MinHeight="260"
+        x:DataType="vm:SettingsViewModel"
+        Title="UseNotch"
+        Width="820" Height="620"
+        MinWidth="640" MinHeight="480"
         Background="#101216"
         FontFamily="Segoe UI"
         WindowStartupLocation="CenterScreen">
-  <Grid Margin="24" RowDefinitions="Auto,*,Auto" RowSpacing="20">
-    <Grid ColumnDefinitions="*,Auto">
-      <StackPanel Spacing="4">
-        <TextBlock Text="{Binding Title}"
-                   FontSize="22" FontWeight="SemiBold" Foreground="#F2F4F7" />
-        <TextBlock Text="Local assistant usage status"
-                   FontSize="13" Foreground="#93A0B2" />
+  <Grid ColumnDefinitions="190,*">
+    <Border Background="#0C0E12" BorderBrush="#1E242E" BorderThickness="0,0,1,0">
+      <StackPanel Margin="12,16" Spacing="10">
+        <TextBlock Text="UseNotch" FontSize="17" FontWeight="SemiBold" Foreground="#F2F4F7" />
+        <TextBlock Text="Local assistant usage" FontSize="12" Foreground="#7F8B9C" />
+        <ItemsControl ItemsSource="{Binding Sections}" Margin="0,10,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsSection">
+              <Button Classes="nav"
+                      Content="{Binding}"
+                      Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).SelectSectionCommand}"
+                      CommandParameter="{Binding}"
+                      HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
       </StackPanel>
-      <Border Grid.Column="1"
-              Background="#1B2737"
-              BorderBrush="#324865"
-              BorderThickness="1"
-              CornerRadius="5"
-              Padding="9,4">
-        <TextBlock Text="Tray active" FontSize="12" Foreground="#B7D5FF" />
-      </Border>
-    </Grid>
-
-    <Border Grid.Row="1"
-            Background="#151A21"
-            BorderBrush="#27303B"
-            BorderThickness="1"
-            CornerRadius="7"
-            Padding="16">
-      <Grid ColumnDefinitions="5,16,*" RowDefinitions="Auto,Auto" RowSpacing="8">
-        <Border Background="#6FA8FF" CornerRadius="2" />
-        <TextBlock Grid.Column="2"
-                   Text="Foundation ready"
-                   FontSize="15" FontWeight="SemiBold" Foreground="#E9EEF5" />
-        <TextBlock x:Name="StatusText"
-                   Grid.Row="1" Grid.Column="2"
-                   Text="{Binding StatusMessage}"
-                   FontSize="13" Foreground="#B3BBC7" TextWrapping="Wrap" />
-      </Grid>
     </Border>
 
-    <TextBlock Grid.Row="2"
-               Text="Close this window to keep UseNotch in the notification area."
-               FontSize="12" Foreground="#7F8B9C" />
+    <ScrollViewer Grid.Column="1" Padding="24">
+      <StackPanel Spacing="16">
+        <TextBlock Text="{Binding SelectedSection}" FontSize="20" FontWeight="SemiBold" Foreground="#F2F4F7" />
+        <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}" FontSize="12" Foreground="#93A0B2" TextWrapping="Wrap" />
+
+        <!-- Status and Providers: the same data the non-activating overlay shows, reachable by keyboard. -->
+        <ItemsControl ItemsSource="{Binding Providers}"
+                      IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsStatusOrProviders}}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ProviderSettingsViewModel">
+              <Border Classes="row" Margin="0,0,0,10">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" Foreground="#E9EEF5" />
+                  <TextBlock Text="{Binding SourceDescription}" Classes="detail" />
+                  <TextBlock Text="{Binding QuotaScope}" Classes="detail" />
+                  <TextBlock Text="{Binding AuthenticationText}" Classes="detail" />
+                  <TextBlock Text="{Binding FreshnessText}" Classes="detail" />
+                  <TextBlock Text="{Binding ActivityText}" Classes="detail" />
+                  <TextBlock Text="{Binding RecoveryAction}" Classes="detail" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                    <Button Content="{Binding RefreshCommandLabel}" Command="{Binding RefreshNowCommand}" />
+                    <Button Content="Reconnect" Command="{Binding ReconnectCommand}" />
+                    <Button Content="{Binding EnabledLabel}" Command="{Binding ToggleEnabledCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAppearance}}">
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Placement" Classes="heading" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Monitor" Classes="label" />
+                <TextBox Text="{Binding MonitorId}" Width="240" Watermark="Primary monitor" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Edge" Classes="label" />
+                <ComboBox ItemsSource="{Binding Edges}" SelectedItem="{Binding Edge}" Width="140" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Offset X" Classes="label" />
+                <NumericUpDown Value="{Binding OffsetX}" Minimum="-4000" Maximum="4000" Increment="4" Width="120" />
+                <TextBlock Text="Offset Y" Classes="label" />
+                <NumericUpDown Value="{Binding OffsetY}" Minimum="-4000" Maximum="4000" Increment="4" Width="120" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Presentation" Classes="heading" />
+              <CheckBox Content="Show the overlay" IsChecked="{Binding OverlayVisible}" />
+              <CheckBox Content="Keep the overlay pinned open" IsChecked="{Binding Pinned}" />
+              <CheckBox Content="Keep visible over full-screen windows" IsChecked="{Binding VisibleOverFullScreen}" />
+              <CheckBox Content="Reduce motion" IsChecked="{Binding ReducedMotion}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="UI scale" Classes="label" />
+                <Slider Value="{Binding UiScale}" Minimum="0.75" Maximum="2.0" TickFrequency="0.25" IsSnapToTickEnabled="True" Width="220" />
+                <TextBlock Text="{Binding UiScale, StringFormat={}{0:0.00}x}" Classes="detail" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsGeneral}}">
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Startup" Classes="heading" />
+              <TextBlock Text="{Binding LaunchAtLoginStatus}" Classes="detail" />
+              <Button Content="Toggle launch at login" Command="{Binding ToggleLaunchAtLoginCommand}" />
+              <TextBlock Text="Launch at login is opt-in and applies to this user account only." Classes="detail" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Monitoring" Classes="heading" />
+              <Button Content="Pause or resume all monitoring" Command="{Binding TogglePauseCommand}" />
+              <TextBlock Text="Pausing stops provider requests and activity scans. It keeps settings and clearly marked cached data." Classes="detail" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsPrivacy}}">
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Local monitoring" Classes="heading" />
+              <CheckBox Content="Observe local assistant activity" IsChecked="{Binding ActivityMonitoringEnabled}" />
+              <TextBlock Text="Activity monitoring reads session metadata only. It never reads conversation content, working directories, or titles." Classes="detail" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Classes="row">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Diagnostics" Classes="heading" />
+              <CheckBox Content="Write a sanitized diagnostic log" IsChecked="{Binding DiagnosticsEnabled}" />
+              <TextBlock Text="Diagnostics are off by default, are capped in size, and never contain tokens, response bodies, or account identifiers." Classes="detail" TextWrapping="Wrap" />
+              <Button Content="Clear UseNotch data" Command="{Binding ClearDataCommand}" />
+              <TextBlock Text="Clearing removes only the cache and logs this application owns. It never modifies or signs out a provider's own tool." Classes="detail" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAbout}}">
+          <Border Classes="row">
+            <StackPanel Spacing="6">
+              <TextBlock Text="About" Classes="heading" />
+              <TextBlock Text="{Binding Version, StringFormat=Version {0}}" Classes="detail" />
+              <TextBlock Text="{Binding DataLocation}" Classes="detail" TextWrapping="Wrap" />
+              <TextBlock Text="UseNotch reads OpenAI Codex and Anthropic Claude Code credentials locally and read-only. It never refreshes, stores, or forwards them." Classes="detail" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <TextBlock Text="Close this window to keep UseNotch in the notification area."
+                   FontSize="12" Foreground="#7F8B9C" />
+      </StackPanel>
+    </ScrollViewer>
   </Grid>
+
+  <Window.Styles>
+    <Style Selector="Button.nav">
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#C3CDDB" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style Selector="Button.nav:pointerover">
+      <Setter Property="Background" Value="#18202B" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="#151A21" />
+      <Setter Property="BorderBrush" Value="#27303B" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#E9EEF5" />
+    </Style>
+    <Style Selector="TextBlock.detail">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#93A0B2" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#C3CDDB" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="MinWidth" Value="70" />
+    </Style>
+  </Window.Styles>
 </Window>

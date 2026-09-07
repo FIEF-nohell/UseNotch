@@ -253,6 +253,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Win32.SystemEvents": "[8.0.0, )",
+          "System.Security.Cryptography.ProtectedData": "[8.0.0, )",
           "UseNotch.Application": "[0.1.0, )"
         }
       },
@@ -295,6 +296,12 @@
         "requested": "[8.0.0, )",
         "resolved": "8.0.0",
         "contentHash": "9opKRyOKMCi2xJ7Bj7kxtZ1r9vbzosMvRrdEhVhDz8j8MoBGgB+WmC94yH839NPH+BclAjtQ/pyagvi/8gDLkw=="
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "CentralTransitive",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
       },
       "Tomlyn": {
         "type": "CentralTransitive",
