@@ -5,4 +5,24 @@
   <Application.Styles>
     <FluentTheme />
   </Application.Styles>
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/tray-mark.ico"
+                ToolTipText="UseNotch status"
+                Clicked="OnTrayIconClicked">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Status and settings" Click="OnShowSettingsClicked" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Show overlay" IsEnabled="False" />
+            <NativeMenuItem Header="Pin overlay" IsEnabled="False" />
+            <NativeMenuItem Header="Refresh usage" IsEnabled="False" />
+            <NativeMenuItem Header="Pause monitoring" IsEnabled="False" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Quit" Click="OnQuitClicked" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
 </Application>

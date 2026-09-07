@@ -7,5 +7,5 @@ public partial class MainWindowViewModel : ObservableObject
     public string Title => "UseNotch";
 
     [ObservableProperty]
-    private string _statusMessage = "Provider monitoring is not connected yet.";
+    private string _statusMessage = "Provider connections and usage polling are scheduled next.";
 }

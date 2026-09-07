@@ -4,16 +4,49 @@
         x:Class="UseNotch.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
-        Width="480" Height="200"
-        MinWidth="360" MinHeight="180"
+        Width="520" Height="310"
+        MinWidth="420" MinHeight="260"
         Background="#101216"
         FontFamily="Segoe UI"
         WindowStartupLocation="CenterScreen">
-  <StackPanel Margin="24" Spacing="12" VerticalAlignment="Center">
-    <TextBlock Text="{Binding Title}"
-               FontSize="20" FontWeight="SemiBold" Foreground="#F2F4F7" />
-    <TextBlock x:Name="StatusText"
-               Text="{Binding StatusMessage}"
-               FontSize="14" Foreground="#B3BBC7" TextWrapping="Wrap" />
-  </StackPanel>
+  <Grid Margin="24" RowDefinitions="Auto,*,Auto" RowSpacing="20">
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{Binding Title}"
+                   FontSize="22" FontWeight="SemiBold" Foreground="#F2F4F7" />
+        <TextBlock Text="Local assistant usage status"
+                   FontSize="13" Foreground="#93A0B2" />
+      </StackPanel>
+      <Border Grid.Column="1"
+              Background="#1B2737"
+              BorderBrush="#324865"
+              BorderThickness="1"
+              CornerRadius="5"
+              Padding="9,4">
+        <TextBlock Text="Tray active" FontSize="12" Foreground="#B7D5FF" />
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="1"
+            Background="#151A21"
+            BorderBrush="#27303B"
+            BorderThickness="1"
+            CornerRadius="7"
+            Padding="16">
+      <Grid ColumnDefinitions="5,16,*" RowDefinitions="Auto,Auto" RowSpacing="8">
+        <Border Background="#6FA8FF" CornerRadius="2" />
+        <TextBlock Grid.Column="2"
+                   Text="Foundation ready"
+                   FontSize="15" FontWeight="SemiBold" Foreground="#E9EEF5" />
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="1" Grid.Column="2"
+                   Text="{Binding StatusMessage}"
+                   FontSize="13" Foreground="#B3BBC7" TextWrapping="Wrap" />
+      </Grid>
+    </Border>
+
+    <TextBlock Grid.Row="2"
+               Text="Close this window to keep UseNotch in the notification area."
+               FontSize="12" Foreground="#7F8B9C" />
+  </Grid>
 </Window>

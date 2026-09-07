@@ -67,17 +67,29 @@ namespace UseNotch.Smoke
 }
 
 $applicationProcess = $null
+$activationProcess = $null
+$shutdownProcess = $null
 try {
     $applicationProcess = Start-Process -FilePath $applicationPath -WorkingDirectory $repositoryRoot -WindowStyle Hidden -PassThru
-    if (-not $applicationProcess.WaitForInputIdle(10000)) {
-        throw 'The application did not finish native UI initialization within 10 seconds.'
+    Start-Sleep -Milliseconds 750
+    $applicationProcess.Refresh()
+    if ($applicationProcess.HasExited) {
+        throw "The tray owner exited before activation (exit $($applicationProcess.ExitCode))."
+    }
+
+    $activationProcess = Start-Process -FilePath $applicationPath -ArgumentList @('--show-status') -WorkingDirectory $repositoryRoot -WindowStyle Hidden -PassThru
+    if (-not $activationProcess.WaitForExit(5000)) {
+        throw 'The second launch did not return after signalling the existing instance.'
+    }
+    if ($activationProcess.ExitCode -ne 0) {
+        throw "The second launch failed (exit $($activationProcess.ExitCode))."
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
         $applicationProcess.Refresh()
         if ($applicationProcess.HasExited) {
-            throw "The application exited before opening its window (exit $($applicationProcess.ExitCode))."
+            throw "The tray owner exited before opening its status window (exit $($applicationProcess.ExitCode))."
         }
         if ($applicationProcess.MainWindowHandle -ne [IntPtr]::Zero) {
             break
@@ -86,7 +98,7 @@ try {
     } while ([DateTime]::UtcNow -lt $deadline)
 
     if ($applicationProcess.MainWindowHandle -eq [IntPtr]::Zero) {
-        throw 'No native application window appeared.'
+        throw 'No native status window appeared after activation.'
     }
     if ($applicationProcess.MainWindowTitle -ne 'UseNotch') {
         throw 'The native window title did not receive its compiled binding.'
@@ -98,22 +110,37 @@ try {
         throw 'The native window is not per-monitor-v2 DPI aware.'
     }
 
-    if (-not $applicationProcess.CloseMainWindow() -or -not $applicationProcess.WaitForExit(5000)) {
-        throw 'Closing the M01 foundation window did not end the application within five seconds.'
+    if (-not $applicationProcess.CloseMainWindow()) {
+        throw 'The status window rejected its close request.'
+    }
+    Start-Sleep -Milliseconds 500
+    $applicationProcess.Refresh()
+    if ($applicationProcess.HasExited) {
+        throw 'Closing the status window ended the tray owner instead of hiding the window.'
+    }
+
+    $shutdownProcess = Start-Process -FilePath $applicationPath -ArgumentList @('--smoke-quit') -WorkingDirectory $repositoryRoot -WindowStyle Hidden -PassThru
+    if (-not $shutdownProcess.WaitForExit(5000)) {
+        throw 'The shutdown signal process did not return.'
+    }
+    if ($shutdownProcess.ExitCode -ne 0 -or -not $applicationProcess.WaitForExit(5000)) {
+        throw 'The tray owner did not exit cleanly after the shutdown signal.'
     }
     if ($applicationProcess.ExitCode -ne 0) {
         throw "Application shutdown failed (exit $($applicationProcess.ExitCode))."
     }
 
-    Write-Output 'PASS: native window and binding loaded; process non-elevated; PerMonitorV2; clean exit.'
+    Write-Output 'PASS: one tray owner accepted activation; status window bound; non-elevated; PerMonitorV2; close hid; shutdown clean.'
 }
 finally {
-    if ($null -ne $applicationProcess) {
-        if (-not $applicationProcess.HasExited) {
-            # Only clean up the process started by this smoke check.
-            $applicationProcess.Kill()
-            $applicationProcess.WaitForExit(5000) | Out-Null
+    foreach ($process in @($shutdownProcess, $activationProcess, $applicationProcess)) {
+        if ($null -ne $process) {
+            if (-not $process.HasExited) {
+                # Only clean up processes started by this smoke check.
+                $process.Kill()
+                $process.WaitForExit(5000) | Out-Null
+            }
+            $process.Dispose()
         }
-        $applicationProcess.Dispose()
     }
 }

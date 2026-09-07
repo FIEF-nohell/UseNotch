@@ -29,7 +29,21 @@ public class MainWindowTests
         }
         finally
         {
-            window.Close();
+            window.CloseForShutdown();
         }
+    }
+
+    [AvaloniaFact]
+    public void Ordinary_close_hides_the_settings_window_until_app_shutdown()
+    {
+        var window = new MainWindow { DataContext = new MainWindowViewModel() };
+
+        window.Show();
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(window.IsVisible);
+
+        window.CloseForShutdown();
     }
 }

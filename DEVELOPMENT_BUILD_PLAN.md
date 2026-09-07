@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M01 project foundation complete. M00-M01 are complete; M02-M14 remain open.
+Status: M02 tray and lifecycle complete. M00-M02 are complete; M03-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,16 +62,16 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M01 project foundation complete; tray, overlay, and providers are not implemented |
-| Active milestone | None; M02 is next |
-| Last completed milestone | M01 |
-| Last validated checkpoint | Completion commit `chore: scaffold solution and CI (M01)`; resolve by milestone ID in Git history. M00 is `4d10e83`. |
+| Overall state | M02 tray and lifecycle complete; overlay and providers are not implemented |
+| Active milestone | None; M03 is next |
+| Last completed milestone | M02 |
+| Last validated checkpoint | Completion commit `feat: add tray and app lifecycle (M02)`; M00 is `4d10e83`, M01 is `254447a`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | No pending M01 changes after its checkpoint commit; no M02 work started |
-| Last verification | Clean-source locked restore, Release build (zero warnings/errors), 10 tests passed, formatting passed, and native standard-user launch/PerMonitorV2/clean exit passed on Windows build 26200 |
-| Next exact action | Read the M01 checkpoint and replace the temporary MainWindow-owned lifetime with the M02 tray/lifetime coordinator; preserve the startup and binding checks |
-| Blocking condition | None for M02. GitHub-hosted CI has not run because this task did not push; M03 native overlay and later provider/signing gates remain unverified |
+| Files currently changed | No pending M02 changes after its checkpoint commit |
+| Last verification | M02 Release build had zero warnings/errors; 17 tests passed; formatting and whitespace checks passed; native duplicate-launch, close-to-hide, and clean shutdown smoke passed on Windows build 26200 |
+| Next exact action | Begin M03 by reading the M02 checkpoint and implementing the static native overlay behavior gate |
+| Blocking condition | None. GitHub-hosted CI has not run because this task did not push; M03 native overlay and later provider/signing gates remain unverified |
 | Known implementation failures | None in M01 checks. Provider.Tests intentionally has no tests yet; no provider behavior or overlay behavior is claimed |
 | Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
 | Provider data accessed | Repository source, package metadata, and public documentation only; no live credentials or usage endpoints accessed |
@@ -110,6 +110,7 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 | Planning only | 2026-09-07 | Saved the original design and prepared this build ledger. No implementation checks claimed. | No repository commit created; Git setup belongs to user | M00 |
 | M00 | 2026-09-07, Windows, user-created public repository on `main` | Verified root and initial commit `0dcc55d`; preserved local reference clone while removing its unconfigured gitlink from tracking; added ignore rules; made design references portable; validated document structure, links, checkbox state, whitespace, and credential-pattern scan. No application build/test claim. | `docs: establish implementation baseline (M00)` | Begin M01; no push or release publication performed |
 | M01 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Seven source and five test projects; pinned Avalonia 11.3.20/MVVM 8.4.2; locked restore and clean Release build passed with zero warnings/errors; 10 tests discovered and passed; `dotnet format --verify-no-changes` passed; `scripts/Test-DesktopLaunch.ps1` verified native title binding, non-elevated token, PerMonitorV2, and exit code 0. Public-repository/whitespace checks passed. See M01 evidence below. | `chore: scaffold solution and CI (M01)` | M02 tray/lifecycle. No remote push, hosted CI run, provider access, overlay claim, or release performed |
+| M02 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added explicit tray-owned lifetime, lazily reused Settings window, close-to-hide behavior, disabled future tray actions, and a same-user/session mutex plus 750 ms named-pipe activation or shutdown signal. The normal Settings surface can be requested by a later launch if the tray is unavailable. Release build had zero warnings/errors; 17 tests passed; formatting and whitespace checks passed. Native smoke verified hidden owner, bounded second launch, status window binding, non-elevation, PerMonitorV2, close-to-hide, and clean shutdown. | `feat: add tray and app lifecycle (M02)` | M03 native overlay gate. No Explorer restart was forced in this interactive development session; the tray host remains Avalonia-owned and a later launch remains the normal-window recovery path. No remote push or provider access performed |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
@@ -126,6 +127,7 @@ Use milestone IDs as checkpoint references until a short hash can be recorded in
 | 2026-09-07 | M01 layer projects and Provider.Tests remain scaffolds where behavior is scheduled later | No invented domain/provider implementations or placeholder passing tests. System.Text.Json is in the framework; repository implementations remain M05 work |
 | 2026-09-07 | Process DPI awareness is established by the manifest; Avalonia owns scaling | Native startup confirmed PerMonitorV2. M03 must coordinate window placement without a competing process-wide DPI setter |
 | 2026-09-07 | No upstream source files or visual assets copied in M01 | Foundation uses normal framework wiring informed by the references; no upstream source notice is required for a copied file at this stage. Preserve notices when later adapting source |
+| 2026-09-07 | Use an ICO for the Win32 tray asset | Avalonia's Win32 tray host rejects SVG icon data at startup. Reused the existing Avalonia foundation's raster app icon after checking that project for a license or notice file and finding none. Replace it with finalized UseNotch branding before release |
 
 Add dated entries for dependency upgrades, platform limitations, changed provider contracts, and scope changes. Update both plans if a product or architecture decision changes. Do not silently replace requirements with easier behavior.
 
@@ -135,7 +137,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 
 - [x] M00: Verify user Git setup and baseline planning checkpoint.
 - [x] M01: Solution, dependencies, non-elevated manifest, and CI build.
-- [ ] M02: Avalonia shell, tray, and application lifecycle.
+- [x] M02: Avalonia shell, tray, and application lifecycle.
 - [ ] M03: Native overlay prototype and Windows behavior gate.
 - [ ] M04: Shared domain, mock provider, and complete state fixtures.
 - [ ] M05: Polling, concurrency, state store, and JSON cache.
@@ -226,13 +228,13 @@ Objective: keep the app reachable and make shutdown deterministic.
 
 Areas: App startup, lifetime coordinator, tray menu, settings shell, single-instance service, lifecycle tests.
 
-- [ ] Use explicit desktop shutdown with application-owned background-service lifetime.
-- [ ] Implement one instance per user/interactive session and bounded same-user activation forwarding.
-- [ ] Implement tray Show status/Settings, Show/hide overlay, Pin, Refresh, Pause, and Quit commands; disable commands until their services exist.
-- [ ] Create settings lazily and reuse it. Closing it hides it without terminating the tray app.
-- [ ] Make a second launch expose the existing settings/status window without creating another poller.
-- [ ] Handle tray loss or Explorer restart; keep a recoverable normal window if no tray surface is available.
-- [ ] Implement cancellation/disposal ownership and a bounded exit path.
+- [x] Use explicit desktop shutdown with application-owned background-service lifetime.
+- [x] Implement one instance per user/interactive session and bounded same-user activation forwarding.
+- [x] Implement tray Show status/Settings, Show/hide overlay, Pin, Refresh, Pause, and Quit commands; disable commands until their services exist.
+- [x] Create settings lazily and reuse it. Closing it hides it without terminating the tray app.
+- [x] Make a second launch expose the existing settings/status window without creating another poller.
+- [x] Handle tray loss or Explorer restart; keep a recoverable normal window if no tray surface is available.
+- [x] Implement cancellation/disposal ownership and a bounded exit path.
 
 Acceptance: repeated show/hide and second launch work; closing settings preserves the app; Quit removes process and tray icon; no orphan background operation remains.
 
