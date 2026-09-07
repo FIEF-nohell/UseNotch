@@ -12,7 +12,6 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     private const uint SetWindowPosNoMove = 0x0002;
     private const uint SetWindowPosNoActivate = 0x0010;
     private const uint SetWindowPosFrameChanged = 0x0020;
-    private const int RegionOr = 2;
     private const int HitTestMessage = 0x0084;
     private const int MouseActivateMessage = 0x0021;
     private const int DpiChangedMessage = 0x02E0;
@@ -71,48 +70,9 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     public void UpdateInteractiveRegions()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_windowHandle == nint.Zero || _interactiveRegionProvider is null)
-        {
-            return;
-        }
-
-        var regions = _interactiveRegionProvider();
-        nint combinedRegion = nint.Zero;
-        try
-        {
-            foreach (var region in regions.Where(region => region.Width > 0 && region.Height > 0))
-            {
-                var nextRegion = CreateRectRgn(region.X, region.Y, region.Right, region.Bottom);
-                if (nextRegion == nint.Zero)
-                {
-                    throw new InvalidOperationException("Unable to create an overlay input region.");
-                }
-
-                if (combinedRegion == nint.Zero)
-                {
-                    combinedRegion = nextRegion;
-                }
-                else
-                {
-                    _ = CombineRgn(combinedRegion, combinedRegion, nextRegion, RegionOr);
-                    _ = DeleteObject(nextRegion);
-                }
-            }
-
-            if (SetWindowRgn(_windowHandle, combinedRegion, true) == 0)
-            {
-                throw new InvalidOperationException("Unable to apply overlay input regions.");
-            }
-
-            combinedRegion = nint.Zero;
-        }
-        finally
-        {
-            if (combinedRegion != nint.Zero)
-            {
-                _ = DeleteObject(combinedRegion);
-            }
-        }
+        // SetWindowRgn clips both hit-testing and painting. At scaled display settings
+        // that can erase visible cells when layout changes. WM_NCHITTEST below owns
+        // click-through, while Avalonia retains the complete visual surface.
     }
 
     public void Dispose()
@@ -198,18 +158,6 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(nint windowHandle, nint insertAfter, int x, int y, int width, int height, uint flags);
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern nint CreateRectRgn(int left, int top, int right, int bottom);
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern int CombineRgn(nint destination, nint source1, nint source2, int mode);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int SetWindowRgn(nint windowHandle, nint region, bool redraw);
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern bool DeleteObject(nint objectHandle);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool ScreenToClient(nint windowHandle, ref NativePoint point);

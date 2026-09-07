@@ -50,7 +50,8 @@ public partial class OverlayViewModel : ObservableObject
         var state = MockScenarioCatalog.Create(provider, scenario);
         var headline = state.Snapshot?.Headline?.Limit.UsedFraction is { } fraction
             ? $"{fraction * 100:0}% used"
-            : state.Snapshot?.Headline is null ? "Awaiting updated window" : "-";
+            : state.Snapshot?.Headline is not null ? "-"
+            : state.Status.Error is not null ? "Usage unavailable" : "Awaiting updated window";
         var status = state.Status.Authentication switch
         {
             AuthenticationState.Authenticated => state.Status.Freshness == DataFreshness.Stale ? "Stale" : "Connected",
@@ -83,7 +84,8 @@ public partial class OverlayViewModel : ObservableObject
     {
         var headline = state.Snapshot?.Headline?.Limit.UsedFraction is { } fraction
             ? $"{fraction * 100:0}% used"
-            : state.Snapshot?.Headline is null ? "Awaiting updated window" : "-";
+            : state.Snapshot?.Headline is not null ? "-"
+            : state.Status.Error is not null ? "Usage unavailable" : "Awaiting updated window";
         var status = state.Status.Authentication switch
         {
             AuthenticationState.Authenticated => state.Status.Freshness switch

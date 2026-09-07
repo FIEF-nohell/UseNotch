@@ -176,8 +176,8 @@ public sealed class CodexUsageProviderTests : IDisposable
 
     [Theory]
     [InlineData("<html>not usage</html>")]
-    [InlineData("{\"rate_limit\":{\"primary_window\":{\"used_percent\":null}}}")]
-    public async Task Usage_request_turns_invalid_or_html_bodies_into_safe_schema_failures(string body)
+    [InlineData("{\"rate_limit\":{\"primary_window\":{\"used_percent\":40}}}")]
+    public async Task Usage_request_turns_invalid_or_incomplete_bodies_into_safe_schema_failures(string body)
     {
         await WriteAuthAsync("token.one.signature", "account-private");
         var provider = CreateProvider(new TestHandler(_ => JsonResponse(body)));
@@ -185,6 +185,18 @@ public sealed class CodexUsageProviderTests : IDisposable
         var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
 
         Assert.Equal(ErrorCategory.Schema, exception.Category);
+    }
+
+    [Fact]
+    public async Task Usage_request_preserves_a_null_percentage_as_an_honest_unavailable_reading()
+    {
+        await WriteAuthAsync("token.one.signature", "account-private");
+        var provider = CreateProvider(new TestHandler(_ => JsonResponse("{\"rate_limit\":{\"primary_window\":{\"limit_window_seconds\":18000,\"used_percent\":null}}}")));
+
+        var snapshot = await provider.ReadAsync(Connection(), CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        Assert.Null(snapshot.Headline?.Limit.UsedFraction);
     }
 
     [Fact]

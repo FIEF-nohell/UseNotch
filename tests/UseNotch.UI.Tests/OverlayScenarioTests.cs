@@ -30,4 +30,21 @@ public class OverlayScenarioTests
         Assert.Contains("estimated", viewModel.ActivityText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("estimated", viewModel.DetailText, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Provider_error_does_not_present_an_unavailable_quota_as_an_updated_window()
+    {
+        var viewModel = new OverlayViewModel();
+        var state = new ProviderRuntimeState(
+            new ProviderConnection(ProviderId.OpenAi, "test", true, 1),
+            null,
+            new ProviderStatus(AuthenticationState.Discovering, DataFreshness.Unknown, null, null, null, false, new ErrorState(ErrorCategory.Schema, false, "Provider response format is unsupported", null, null)),
+            0,
+            0);
+
+        viewModel.ApplyRuntimeState(state);
+
+        Assert.Equal("Usage unavailable", viewModel.OpenAiHeadline);
+        Assert.Equal("Provider response format is unsupported", viewModel.OpenAiStatusText);
+    }
 }

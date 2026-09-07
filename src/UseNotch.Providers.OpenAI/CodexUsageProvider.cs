@@ -395,7 +395,12 @@ public static class CodexUsageParser
         }
 
         if (!window.TryGetProperty("limit_window_seconds", out var durationElement) || !durationElement.TryGetDouble(out var seconds) || seconds <= 0
-            || !window.TryGetProperty("used_percent", out var usedElement) || usedElement.ValueKind == JsonValueKind.Null || !usedElement.TryGetDecimal(out var percent) || percent < 0)
+            || !window.TryGetProperty("used_percent", out var usedElement))
+        {
+            return;
+        }
+        decimal? percent = usedElement.ValueKind == JsonValueKind.Null ? null : usedElement.TryGetDecimal(out var parsedPercent) && parsedPercent >= 0 ? parsedPercent : null;
+        if (usedElement.ValueKind != JsonValueKind.Null && percent is null)
         {
             return;
         }
