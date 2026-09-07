@@ -49,6 +49,60 @@ namespace UseNotch.OverlaySmoke
         public static extern bool SetForegroundWindow(IntPtr window);
 
         [DllImport("user32.dll")]
+        private static extern bool AttachThreadInput(uint attachTo, uint attachFrom, bool attach);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        /// <summary>
+        /// Windows only lets the foreground process hand focus away. This check runs from a background
+        /// shell, so borrow the current foreground thread's input queue long enough to place focus on the
+        /// independent target. This affects only the harness, never the overlay behaviour under test.
+        /// </summary>
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
+
+        public static bool ForceForeground(IntPtr window)
+        {
+            if (SetForegroundWindow(window) && GetForegroundWindow() == window)
+            {
+                return true;
+            }
+
+            // Windows grants foreground rights to a process that owns the most recent input event. A
+            // benign ALT press and release satisfies that rule without typing anything anywhere.
+            const byte AltKey = 0x12;
+            const uint KeyUp = 0x0002;
+            keybd_event(AltKey, 0, 0, UIntPtr.Zero);
+            keybd_event(AltKey, 0, KeyUp, UIntPtr.Zero);
+            if (SetForegroundWindow(window) && GetForegroundWindow() == window)
+            {
+                return true;
+            }
+
+            IntPtr current = GetForegroundWindow();
+            uint currentProcessId;
+            uint currentThread = GetWindowThreadProcessId(current, out currentProcessId);
+            uint thisThread = GetCurrentThreadId();
+            if (currentThread == 0 || currentThread == thisThread)
+            {
+                return GetForegroundWindow() == window;
+            }
+
+            AttachThreadInput(thisThread, currentThread, true);
+            try
+            {
+                SetForegroundWindow(window);
+            }
+            finally
+            {
+                AttachThreadInput(thisThread, currentThread, false);
+            }
+
+            return GetForegroundWindow() == window;
+        }
+
+        [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr window, out RECT rectangle);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -74,6 +128,20 @@ namespace UseNotch.OverlaySmoke
 
         [DllImport("user32.dll")]
         public static extern bool SetCursorPos(int x, int y);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr WindowFromPoint(POINT point);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT { public int X; public int Y; }
+
+        public static IntPtr WindowAt(int x, int y)
+        {
+            POINT point;
+            point.X = x;
+            point.Y = y;
+            return WindowFromPoint(point);
+        }
 
         [DllImport("user32.dll")]
         public static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extraInfo);
@@ -149,9 +217,14 @@ try {
     if ($NegativeMonitor) {
         [UseNotch.OverlaySmoke.Native]::SetWindowPos($targetWindow, [IntPtr]::Zero, -900, -1400, 3000, 2000, 0x0040) | Out-Null
     }
-    [UseNotch.OverlaySmoke.Native]::SetForegroundWindow($targetWindow) | Out-Null
-    Start-Sleep -Milliseconds 250
-    if ([UseNotch.OverlaySmoke.Native]::GetForegroundWindow() -ne $targetWindow) {
+    $focused = $false
+    for ($attempt = 0; $attempt -lt 5 -and -not $focused; $attempt++) {
+        $focused = [UseNotch.OverlaySmoke.Native]::ForceForeground($targetWindow)
+        if (-not $focused) {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if (-not $focused) {
         throw 'The independent input target could not receive foreground focus.'
     }
 
@@ -182,14 +255,30 @@ try {
         [UseNotch.OverlaySmoke.Native]::DeleteObject($region) | Out-Null
     }
 
-    Invoke-Click ($rectangle.Left + 8) ($rectangle.Top + 8)
+    # A real click and wheel event decide this, not WindowFromPoint, which does not run the window's own
+    # hit test and therefore cannot see the transparent result.
+    $transparentX = $rectangle.Left + 8
+    $transparentY = $rectangle.Top + 8
+    Invoke-Click $transparentX $transparentY
     [UseNotch.OverlaySmoke.Native]::mouse_event([UseNotch.OverlaySmoke.Native]::Wheel, 0, 0, 120, [UIntPtr]::Zero)
     $targetWindow = Wait-ForWindow $targetProcess.Id 'UseNotch overlay input target | clicks=1 | wheels=1'
     if ([UseNotch.OverlaySmoke.Native]::GetForegroundWindow() -ne $targetWindow) {
         throw 'Transparent overlay space did not preserve target focus.'
     }
 
-    Invoke-Click ($rectangle.Right - 38) ($rectangle.Top + 72)
+    # The collapsed handle is right-aligned and vertically centred. Hovering it expands the overlay.
+    $handleX = $rectangle.Right - 32
+    $handleY = [int](($rectangle.Top + $rectangle.Bottom) / 2)
+    [UseNotch.OverlaySmoke.Native]::SetCursorPos($handleX, $handleY) | Out-Null
+    $overlayWindow = Wait-ForWindow $overlayProcess.Id 'UseNotch overlay open'
+    if ([UseNotch.OverlaySmoke.Native]::GetForegroundWindow() -ne $targetWindow) {
+        throw 'Hovering the overlay stole foreground focus.'
+    }
+
+    # The first provider cell sits above the vertical centre once the overlay is expanded.
+    $cellX = $rectangle.Right - 60
+    $cellY = $handleY - 30
+    Invoke-Click $cellX $cellY
     Start-Sleep -Milliseconds 250
     $targetTitleAfterVisibleClick = [UseNotch.OverlaySmoke.Native]::GetTitle($targetWindow)
     if ($targetTitleAfterVisibleClick -ne 'UseNotch overlay input target | clicks=1 | wheels=1') {
@@ -208,7 +297,7 @@ try {
         throw "The overlay process exited with code $($overlayProcess.ExitCode)."
     }
 
-    Write-Output 'PASS: transparent corner click and wheel reached an independent process; visible cell expanded without foreground activation; overlay exited cleanly.'
+    Write-Output 'PASS: transparent space belonged to the independent process for both the hit test and real input; hovering the handle expanded the overlay; the visible cell opened details without foreground activation; overlay exited cleanly.'
 }
 finally {
     foreach ($process in @($shutdownProcess, $overlayProcess, $targetProcess)) {

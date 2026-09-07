@@ -17,6 +17,7 @@ using UseNotch.Platform.Windows.Session;
 using UseNotch.Platform.Windows.Startup;
 using UseNotch.Providers.Anthropic;
 using UseNotch.Providers.OpenAI;
+using PlatformOverlayEdge = UseNotch.Platform.Windows.Overlay.OverlayEdge;
 
 namespace UseNotch.App;
 
@@ -93,6 +94,7 @@ public partial class App : Avalonia.Application
 
             if (HasArgument("--overlay-smoke"))
             {
+                _overlayViewModel.Apply(OverlayTrigger.Show);
                 if (HasArgument("--overlay-smoke-negative"))
                 {
                     _overlayController.PreferredMonitorId = new Win32MonitorService()
@@ -177,15 +179,37 @@ public partial class App : Avalonia.Application
         }
 
         _overlayController.PreferredMonitorId = settings.MonitorId;
+        _overlayController.Edge = ToPlatformEdge(settings.Edge);
+        _overlayViewModel.ReducedMotion = settings.ReducedMotion;
+        _overlayViewModel.UiScale = settings.UiScale;
+        if (settings.Pinned != _overlayViewModel.Presentation.Pinned)
+        {
+            _overlayViewModel.Apply(OverlayTrigger.PinToggled);
+        }
+
         if (settings.Visible)
         {
             _overlayController.Show();
+            _overlayViewModel.Apply(OverlayTrigger.Show);
         }
         else
         {
+            _overlayViewModel.Apply(OverlayTrigger.Hide);
             _overlayController.Hide();
         }
     }
+
+    /// <summary>
+    /// The settings edge and the native placement edge are separate types on purpose: the application
+    /// layer must not depend on the Windows platform project. They are mapped by name, not by value.
+    /// </summary>
+    private static PlatformOverlayEdge ToPlatformEdge(UseNotch.Application.OverlayEdge edge) => edge switch
+    {
+        UseNotch.Application.OverlayEdge.Left => PlatformOverlayEdge.Left,
+        UseNotch.Application.OverlayEdge.Top => PlatformOverlayEdge.Top,
+        UseNotch.Application.OverlayEdge.Bottom => PlatformOverlayEdge.Bottom,
+        _ => PlatformOverlayEdge.Right,
+    };
 
     private static bool HasArgument(string expectedArgument) =>
         Environment.GetCommandLineArgs().Any(argument =>

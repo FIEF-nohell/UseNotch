@@ -57,6 +57,9 @@ public static class MockScenarioCatalog
         {
             MockScenario.Working => ActivityState.Working,
             MockScenario.Waiting => ActivityState.Waiting,
+            // The estimated fixture exists to exercise the estimated label, so it needs an actual state
+            // to label. An unknown state is covered by the UnknownActivity fixture instead.
+            MockScenario.Estimated => ActivityState.Working,
             _ => ActivityState.Unknown,
         };
         var activity = scenario is MockScenario.Working or MockScenario.Waiting or MockScenario.Estimated

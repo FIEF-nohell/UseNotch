@@ -1,11 +1,12 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UseNotch.App.ViewModels"
+        xmlns:controls="using:UseNotch.App.Controls"
         x:Class="UseNotch.App.Views.OverlayWindow"
         x:DataType="vm:OverlayViewModel"
         Title="UseNotch overlay"
-        Width="260"
-        Height="220"
+        Width="380"
+        Height="260"
         Background="Transparent"
         CanResize="False"
         ShowActivated="False"
@@ -15,74 +16,132 @@
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="Manual">
   <Grid Background="Transparent">
-    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="6">
-      <Button x:Name="OpenAiCell" Classes="overlayCell" Click="OnOpenAiClicked">
-        <StackPanel Spacing="1">
-          <TextBlock Text="OPENAI" Classes="providerLabel" />
-          <TextBlock Text="{Binding OpenAiHeadline}" Classes="providerValue" />
-        </StackPanel>
-      </Button>
-      <Button x:Name="AnthropicCell" Classes="overlayCell" Click="OnAnthropicClicked">
-        <StackPanel Spacing="1">
-          <TextBlock Text="ANTHROPIC" Classes="providerLabel" />
-          <TextBlock Text="{Binding AnthropicHeadline}" Classes="providerValue" />
-        </StackPanel>
-      </Button>
+    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+      <!-- Collapsed handle. It is the only visible surface until the pointer arrives. -->
+      <Border x:Name="CollapsedHandle"
+              Width="64" Height="12"
+              HorizontalAlignment="Right"
+              Background="#F0101216"
+              BorderBrush="#343B46"
+              BorderThickness="1"
+              CornerRadius="6"
+              IsVisible="{Binding !ShowsProviderCells}"
+              AutomationProperties.Name="UseNotch overlay handle" />
+
+      <StackPanel x:Name="ProviderCells" Spacing="8" IsVisible="{Binding ShowsProviderCells}">
+        <Button x:Name="OpenAiCell"
+                Classes="overlayCell"
+                Click="OnOpenAiClicked"
+                AutomationProperties.Name="{Binding OpenAi.AutomationName}">
+          <Grid ColumnDefinitions="Auto,12,*" VerticalAlignment="Center">
+            <controls:QuotaRing Width="36" Height="36"
+                                Fraction="{Binding OpenAi.RingFraction}"
+                                ArcBrush="{Binding OpenAi.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="{Binding OpenAi.ShortName}" Classes="providerLabel" />
+              <TextBlock Text="{Binding OpenAi.Headline}" Classes="providerValue" />
+              <TextBlock Text="{Binding OpenAi.ScopeText}" Classes="providerScope" />
+            </StackPanel>
+          </Grid>
+        </Button>
+
+        <Button x:Name="AnthropicCell"
+                Classes="overlayCell"
+                Click="OnAnthropicClicked"
+                AutomationProperties.Name="{Binding Anthropic.AutomationName}">
+          <Grid ColumnDefinitions="Auto,12,*" VerticalAlignment="Center">
+            <controls:QuotaRing Width="36" Height="36"
+                                Fraction="{Binding Anthropic.RingFraction}"
+                                ArcBrush="{Binding Anthropic.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="{Binding Anthropic.ShortName}" Classes="providerLabel" />
+              <TextBlock Text="{Binding Anthropic.Headline}" Classes="providerValue" />
+              <TextBlock Text="{Binding Anthropic.ScopeText}" Classes="providerScope" />
+            </StackPanel>
+          </Grid>
+        </Button>
+      </StackPanel>
     </StackPanel>
+
     <Border x:Name="DetailPanel"
-            IsVisible="False"
-            Width="170"
-            Padding="12"
+            IsVisible="{Binding ShowsDetails}"
+            Width="300"
+            MaxHeight="240"
+            Padding="16"
             HorizontalAlignment="Left"
             VerticalAlignment="Center"
-            Background="#F0181D26"
-            BorderBrush="#FF3A475A"
+            Background="#F0191D24"
+            BorderBrush="#343B46"
             BorderThickness="1"
             CornerRadius="8">
-      <StackPanel Spacing="6">
-        <TextBlock x:Name="DetailTitle" Text="OpenAI status" Classes="detailTitle" />
-        <TextBlock x:Name="DetailText" Text="Static overlay validation." TextWrapping="Wrap" Classes="detailText" />
-        <Button x:Name="CloseDetail" Classes="detailClose" Content="Close" Click="OnCloseDetailClicked" />
-      </StackPanel>
+      <ScrollViewer>
+        <StackPanel Spacing="8">
+          <TextBlock x:Name="DetailTitle" Text="{Binding DetailTitle}" Classes="detailTitle" />
+          <TextBlock x:Name="DetailText" Text="{Binding DetailText}" TextWrapping="Wrap" Classes="detailText" />
+          <Button x:Name="CloseDetail"
+                  Classes="detailClose"
+                  Content="Close"
+                  Click="OnCloseDetailClicked"
+                  AutomationProperties.Name="Close provider details" />
+        </StackPanel>
+      </ScrollViewer>
     </Border>
   </Grid>
+
   <Window.Styles>
     <Style Selector="Button.overlayCell">
-      <Setter Property="Width" Value="76" />
-      <Setter Property="Height" Value="70" />
-      <Setter Property="Padding" Value="10" />
-      <Setter Property="Background" Value="#F0171B23" />
-      <Setter Property="BorderBrush" Value="#FF344154" />
+      <Setter Property="MinWidth" Value="152" />
+      <Setter Property="MinHeight" Value="56" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="Background" Value="#F0101216" />
+      <Setter Property="BorderBrush" Value="#343B46" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="6" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
     </Style>
     <Style Selector="Button.overlayCell:pointerover">
-      <Setter Property="Background" Value="#F0242B38" />
-      <Setter Property="BorderBrush" Value="#FF72A9FF" />
+      <Setter Property="Background" Value="#F01A1F27" />
+      <Setter Property="BorderBrush" Value="#687588" />
+    </Style>
+    <Style Selector="Button.overlayCell:pressed">
+      <Setter Property="Background" Value="#F00B0D11" />
+    </Style>
+    <Style Selector="Button.overlayCell:focus-visible">
+      <Setter Property="BorderBrush" Value="#8AB4FF" />
+      <Setter Property="BorderThickness" Value="2" />
     </Style>
     <Style Selector="TextBlock.providerLabel">
-      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#FF9EACBF" />
+      <Setter Property="Foreground" Value="#B3BBC7" />
     </Style>
     <Style Selector="TextBlock.providerValue">
-      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Segoe UI" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#FFF1F5FA" />
+      <Setter Property="Foreground" Value="#F2F4F7" />
+    </Style>
+    <Style Selector="TextBlock.providerScope">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#B3BBC7" />
     </Style>
     <Style Selector="TextBlock.detailTitle">
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="14" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#FFF1F5FA" />
+      <Setter Property="Foreground" Value="#F2F4F7" />
     </Style>
     <Style Selector="TextBlock.detailText">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#FFBAC6D7" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="#B3BBC7" />
     </Style>
     <Style Selector="Button.detailClose">
       <Setter Property="HorizontalAlignment" Value="Left" />
-      <Setter Property="Padding" Value="7,3" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="12,4" />
+    </Style>
+    <Style Selector="Button.detailClose:focus-visible">
+      <Setter Property="BorderBrush" Value="#8AB4FF" />
+      <Setter Property="BorderThickness" Value="2" />
     </Style>
   </Window.Styles>
 </Window>
