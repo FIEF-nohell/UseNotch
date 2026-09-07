@@ -55,12 +55,16 @@ public sealed class OverlayController : IDisposable
             throw new InvalidOperationException("Avalonia did not provide an HWND for the overlay.");
         }
 
+        window.UpdateLayout();
         _windowPlatform.Attach(
             handle,
             window.GetInteractivePixelRegions,
             OnNativeMetricsChanged);
         window.Opacity = 1;
         ForegroundWindowAfterShow = _windowPlatform.GetForegroundWindow();
+        Dispatcher.UIThread.Post(
+            _windowPlatform.UpdateInteractiveRegions,
+            DispatcherPriority.Render);
     }
 
     public void Hide()

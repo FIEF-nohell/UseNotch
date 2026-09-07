@@ -16,6 +16,7 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
+        _viewModel.LoadDevelopmentScenario();
         ScalingChanged += (_, _) => InteractiveRegionsChanged?.Invoke(this, EventArgs.Empty);
     }
 

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [switch]$NegativeMonitor
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,6 +50,24 @@ namespace UseNotch.OverlaySmoke
 
         [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr window, out RECT rectangle);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+        [DllImport("user32.dll")]
+        public static extern int GetWindowRgn(IntPtr window, IntPtr region);
+
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+        [DllImport("gdi32.dll")]
+        public static extern int GetRgnBox(IntPtr region, out RECT rectangle);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool PtInRegion(IntPtr region, int x, int y);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool DeleteObject(IntPtr objectHandle);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr window, StringBuilder buffer, int maximumCount);
@@ -127,14 +146,22 @@ $shutdownProcess = $null
 try {
     $targetProcess = Start-Process -FilePath $harnessPath -WorkingDirectory $repositoryRoot -PassThru
     $targetWindow = Wait-ForWindow $targetProcess.Id 'UseNotch overlay input target | clicks=0 | wheels=0'
+    if ($NegativeMonitor) {
+        [UseNotch.OverlaySmoke.Native]::SetWindowPos($targetWindow, [IntPtr]::Zero, -900, -1400, 3000, 2000, 0x0040) | Out-Null
+    }
     [UseNotch.OverlaySmoke.Native]::SetForegroundWindow($targetWindow) | Out-Null
     Start-Sleep -Milliseconds 250
     if ([UseNotch.OverlaySmoke.Native]::GetForegroundWindow() -ne $targetWindow) {
         throw 'The independent input target could not receive foreground focus.'
     }
 
-    $overlayProcess = Start-Process -FilePath $applicationPath -ArgumentList '--overlay-smoke' -WorkingDirectory $repositoryRoot -PassThru
+    $overlayArguments = @('--overlay-smoke')
+    if ($NegativeMonitor) {
+        $overlayArguments += '--overlay-smoke-negative'
+    }
+    $overlayProcess = Start-Process -FilePath $applicationPath -ArgumentList $overlayArguments -WorkingDirectory $repositoryRoot -PassThru
     $overlayWindow = Wait-ForWindow $overlayProcess.Id 'UseNotch overlay'
+    Start-Sleep -Milliseconds 500
     if ([UseNotch.OverlaySmoke.Native]::GetForegroundWindow() -ne $targetWindow) {
         throw 'Showing the overlay stole foreground focus.'
     }
@@ -142,6 +169,17 @@ try {
     $rectangle = [UseNotch.OverlaySmoke.Native+RECT]::new()
     if (-not [UseNotch.OverlaySmoke.Native]::GetWindowRect($overlayWindow, [ref]$rectangle)) {
         throw 'Could not read the overlay bounds.'
+    }
+
+    $region = [UseNotch.OverlaySmoke.Native]::CreateRectRgn(0, 0, 0, 0)
+    try {
+        $regionStatus = [UseNotch.OverlaySmoke.Native]::GetWindowRgn($overlayWindow, $region)
+        $regionBounds = [UseNotch.OverlaySmoke.Native+RECT]::new()
+        [UseNotch.OverlaySmoke.Native]::GetRgnBox($region, [ref]$regionBounds) | Out-Null
+        Write-Output "Overlay bounds: $($rectangle.Left),$($rectangle.Top) $($rectangle.Right - $rectangle.Left)x$($rectangle.Bottom - $rectangle.Top); region=$regionStatus box=$($regionBounds.Left),$($regionBounds.Top) $($regionBounds.Right - $regionBounds.Left)x$($regionBounds.Bottom - $regionBounds.Top)"
+    }
+    finally {
+        [UseNotch.OverlaySmoke.Native]::DeleteObject($region) | Out-Null
     }
 
     Invoke-Click ($rectangle.Left + 8) ($rectangle.Top + 8)

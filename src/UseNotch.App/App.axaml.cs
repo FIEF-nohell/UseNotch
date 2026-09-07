@@ -5,7 +5,9 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using UseNotch.App.Lifecycle;
 using UseNotch.App.Overlay;
+using UseNotch.App.ViewModels;
 using UseNotch.App.Views;
+using UseNotch.Application;
 using UseNotch.Platform.Windows.Overlay;
 
 namespace UseNotch.App;
@@ -64,10 +66,27 @@ public partial class App : Avalonia.Application
                 _lifecycleCoordinator.ShowSettings();
             }
 
+            var mockScenario = Environment.GetCommandLineArgs()
+                .FirstOrDefault(argument => argument.StartsWith("--mock-scenario=", StringComparison.OrdinalIgnoreCase))
+                ?.Split('=', 2)[1];
+            if (mockScenario is not null && Enum.TryParse<MockScenario>(mockScenario, true, out var scenario))
+            {
+                OverlayViewModel.DevelopmentScenario = scenario;
+            }
+
             if (HasArgument("--overlay-smoke"))
             {
+                if (HasArgument("--overlay-smoke-negative"))
+                {
+                    _overlayController.PreferredMonitorId = new Win32MonitorService()
+                        .GetMonitors()
+                        .FirstOrDefault(monitor => monitor.Bounds.X < 0)
+                        ?.Id;
+                }
+
                 _overlayController.Show();
             }
+
         }
 
         base.OnFrameworkInitializationCompleted();

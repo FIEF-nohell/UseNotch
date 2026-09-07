@@ -19,13 +19,13 @@
       <Button x:Name="OpenAiCell" Classes="overlayCell" Click="OnOpenAiClicked">
         <StackPanel Spacing="1">
           <TextBlock Text="OPENAI" Classes="providerLabel" />
-          <TextBlock Text="Static" Classes="providerValue" />
+          <TextBlock Text="{Binding OpenAiHeadline}" Classes="providerValue" />
         </StackPanel>
       </Button>
       <Button x:Name="AnthropicCell" Classes="overlayCell" Click="OnAnthropicClicked">
         <StackPanel Spacing="1">
           <TextBlock Text="ANTHROPIC" Classes="providerLabel" />
-          <TextBlock Text="Static" Classes="providerValue" />
+          <TextBlock Text="{Binding StatusText}" Classes="providerValue" />
         </StackPanel>
       </Button>
     </StackPanel>
