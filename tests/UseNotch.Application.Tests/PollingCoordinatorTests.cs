@@ -173,6 +173,80 @@ public class PollingCoordinatorTests
     }
 
     [Fact]
+    public async Task Failure_authentication_hint_overrides_the_previous_state()
+    {
+        var provider = new FailingProvider(new ProviderReadException("secret response", false, category: ErrorCategory.Authentication, code: 401, authenticationHint: AuthenticationState.Expired));
+        var store = new InMemoryUsageStateStore();
+        await using var coordinator = new PollingCoordinator([provider], store);
+        coordinator.Start(new ProviderConnection(ProviderId.OpenAi, "mock", true, 1));
+
+        var state = await WaitForStateAsync(store, ProviderId.OpenAi);
+        Assert.Equal(AuthenticationState.Expired, state.Status.Authentication);
+    }
+
+    [Fact]
+    public async Task Failure_without_a_hint_keeps_the_previously_observed_authentication_state()
+    {
+        var provider = new SequencedProvider(
+            _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-a")),
+            _ => Task.FromException<UsageSnapshot?>(new ProviderReadException("secret response", true, category: ErrorCategory.Network)));
+        var store = new InMemoryUsageStateStore();
+        await using var coordinator = new PollingCoordinator(
+            [provider],
+            store,
+            options: new PollingOptions(TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
+        coordinator.Start(new ProviderConnection(ProviderId.OpenAi, "mock", true, 1));
+
+        ProviderRuntimeState? state = null;
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            state = store.Get(ProviderId.OpenAi);
+            if (state?.Status.Error is not null)
+            {
+                break;
+            }
+            await Task.Delay(10);
+        }
+
+        Assert.Equal(AuthenticationState.Authenticated, state!.Status.Authentication);
+    }
+
+    [Fact]
+    public async Task Account_change_starts_a_new_epoch_and_replaces_the_old_reading()
+    {
+        var provider = new SequencedProvider(
+            _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-a")),
+            _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-b")));
+        var store = new InMemoryUsageStateStore();
+        await using var coordinator = new PollingCoordinator(
+            [provider],
+            store,
+            options: new PollingOptions(TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
+        coordinator.Start(new ProviderConnection(ProviderId.OpenAi, "mock", true, 1));
+
+        var first = await WaitForStateAsync(store, ProviderId.OpenAi);
+        Assert.Equal("account-a", first.Snapshot!.Account.Partition);
+        Assert.Equal(0, first.AccountGeneration);
+
+        ProviderRuntimeState second = first;
+        for (var attempt = 0; attempt < 200 && second.Snapshot!.Account.Partition == "account-a"; attempt++)
+        {
+            await Task.Delay(10);
+            second = store.Get(ProviderId.OpenAi)!;
+        }
+
+        Assert.Equal("account-b", second.Snapshot!.Account.Partition);
+        Assert.Equal(1, second.AccountGeneration);
+    }
+
+    private static UsageSnapshot Snapshot(string accountPartition)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var window = new QuotaWindow("session", "session", TimeSpan.FromHours(5), now, now.AddHours(4), new UsageLimit(1, 4, 5, .2m, "requests"));
+        return new UsageSnapshot(ProviderId.OpenAi, new AccountScope(accountPartition, IdentityConfidence.LocalPartition), now, [window], "session", new SourceDescriptor("test", "epoch", true), null);
+    }
+
+    [Fact]
     public async Task Cached_startup_is_stale_and_expired_headlines_are_removed()
     {
         var root = Path.Combine(Path.GetTempPath(), "usenotch-cache-" + Guid.NewGuid().ToString("N"));
@@ -304,6 +378,19 @@ public class PollingCoordinatorTests
             var now = DateTimeOffset.UtcNow;
             var window = new QuotaWindow("session", "session", TimeSpan.FromHours(5), now, now.AddHours(4), new UsageLimit(1, 4, 5, .2m, "requests"));
             return Task.FromResult<UsageSnapshot?>(new UsageSnapshot(ProviderId.OpenAi, new AccountScope("account", IdentityConfidence.ProviderConfirmed), now, [window], "session", new SourceDescriptor("test", "dispatcher", true), null));
+        }
+    }
+
+    private sealed class SequencedProvider(params Func<ProviderConnection, Task<UsageSnapshot?>>[] calls) : IUsageProvider
+    {
+        private int _index;
+        public ProviderId Provider => ProviderId.OpenAi;
+
+        public Task<UsageSnapshot?> ReadAsync(ProviderConnection connection, CancellationToken cancellationToken)
+        {
+            var index = Math.Min(_index, calls.Length - 1);
+            _index++;
+            return calls[index](connection);
         }
     }
 

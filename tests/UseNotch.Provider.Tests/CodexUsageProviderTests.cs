@@ -328,3 +328,189 @@ public sealed class ClaudeUsageParserTests
         Assert.StartsWith("claude:", source.SourceId, StringComparison.Ordinal);
     }
 }
+
+public sealed class ClaudeUsageProviderTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "UseNotch.Tests", Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public async Task Credential_reader_reports_a_missing_sign_in_when_no_file_exists()
+    {
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(
+            () => new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None));
+
+        Assert.Equal(401, exception.Code);
+        Assert.Equal(AuthenticationState.Missing, exception.AuthenticationHint);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{\"ANTHROPIC_API_KEY\":\"synthetic\"}")]
+    [InlineData("{\"claudeAiOauth\":{\"accessToken\":\"\"}}")]
+    public async Task Credential_reader_reports_unsupported_shapes_without_retrying_forever(string body)
+    {
+        await WriteCredentialsAsync(body);
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(
+            () => new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None));
+
+        Assert.True(exception.IsSchemaFailure);
+        Assert.Equal(AuthenticationState.Unsupported, exception.AuthenticationHint);
+    }
+
+    [Fact]
+    public async Task Credential_reader_recovers_from_a_partial_write_on_retry()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, ".credentials.json");
+        await File.WriteAllTextAsync(path, "{\"claudeAiOauth\":{\"acce");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(20);
+            await File.WriteAllTextAsync(path, "{\"claudeAiOauth\":{\"accessToken\":\"complete.token\",\"expiresAt\":1900000000000}}");
+        });
+
+        var credential = await new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None);
+
+        Assert.Equal("complete.token", credential.AccessToken);
+    }
+
+    [Fact]
+    public async Task Credential_reader_keeps_the_expiry_hint_local_and_out_of_the_fingerprint()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\",\"expiresAt\":1900000000000}}");
+
+        var credential = await new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None);
+
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1900000000000), credential.ExpiryHint);
+        Assert.NotEqual(credential.AccessToken, credential.Fingerprint);
+    }
+
+    [Fact]
+    public async Task Usage_request_sends_only_to_the_allowlisted_endpoint_with_the_oauth_beta_header()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
+        var handler = new TestHandler(request =>
+        {
+            Assert.Equal(ClaudeUsageProvider.UsageEndpoint, request.RequestUri);
+            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+            Assert.Equal("synthetic.token", request.Headers.Authorization?.Parameter);
+            Assert.Equal("oauth-2025-04-20", request.Headers.GetValues("anthropic-beta").Single());
+            return JsonResponse("""{"five_hour":{"utilization":40,"resets_at":"2027-01-15T12:00:00Z"}}""");
+        });
+
+        var snapshot = await CreateProvider(handler).ReadAsync(Connection(), CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal("session", snapshot.HeadlineWindowId);
+        Assert.Equal("Claude Code credentials", snapshot.Source.Kind);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task Unauthorized_response_is_expired_when_the_local_hint_already_passed()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\",\"expiresAt\":0}}");
+        var provider = CreateProvider(new TestHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.Equal(AuthenticationState.Expired, exception.AuthenticationHint);
+    }
+
+    [Fact]
+    public async Task Unauthorized_response_is_rejected_when_there_is_no_expired_local_hint()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
+        var provider = CreateProvider(new TestHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.Equal(AuthenticationState.Rejected, exception.AuthenticationHint);
+    }
+
+    [Fact]
+    public async Task Forbidden_response_reports_access_denied()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
+        var provider = CreateProvider(new TestHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.Equal(ErrorCategory.Forbidden, exception.Category);
+        Assert.Equal(AuthenticationState.AccessDenied, exception.AuthenticationHint);
+    }
+
+    [Fact]
+    public async Task Unauthorized_request_retries_once_only_when_the_credential_file_token_rotates()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"token.one\"}}");
+        var handler = new TestHandler(request =>
+        {
+            if (request.Headers.Authorization?.Parameter == "token.one")
+            {
+                File.WriteAllText(Path.Combine(_root, ".credentials.json"), "{\"claudeAiOauth\":{\"accessToken\":\"token.two\"}}");
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
+            return JsonResponse("""{"five_hour":{"utilization":40}}""");
+        });
+
+        var snapshot = await CreateProvider(handler).ReadAsync(Connection(), CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Unauthorized_request_does_not_retry_when_the_credential_file_is_unchanged()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"token.one\"}}");
+        var handler = new TestHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        await Assert.ThrowsAsync<ProviderReadException>(() => CreateProvider(handler).ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task Oversized_response_is_a_safe_schema_failure()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
+        var body = "{\"five_hour\":{\"utilization\":40,\"padding\":\"" + new string('x', 300 * 1024) + "\"}}";
+        var provider = CreateProvider(new TestHandler(_ => JsonResponse(body)));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.True(exception.IsSchemaFailure);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, true);
+        }
+    }
+
+    private ClaudeUsageProvider CreateProvider(HttpMessageHandler handler) => new(new ClaudeSourceResolver(_root), handler: handler);
+    private static ProviderConnection Connection() => new(ProviderId.Anthropic, "test", true, 1);
+
+    private async Task WriteCredentialsAsync(string body)
+    {
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(Path.Combine(_root, ".credentials.json"), body, CancellationToken.None);
+    }
+
+    private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+    private sealed class TestHandler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler
+    {
+        public List<HttpRequestMessage> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            return Task.FromResult(response(request));
+        }
+    }
+}

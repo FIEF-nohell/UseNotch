@@ -13,13 +13,15 @@ public sealed class ProviderReadException : Exception
         bool schemaFailure = false,
         DateTimeOffset? serverDeadline = null,
         ErrorCategory category = ErrorCategory.Network,
-        int? code = null) : base(message)
+        int? code = null,
+        AuthenticationState? authenticationHint = null) : base(message)
     {
         IsTransient = transient;
         IsSchemaFailure = schemaFailure;
         ServerDeadline = serverDeadline;
         Category = schemaFailure ? ErrorCategory.Schema : category;
         Code = code;
+        AuthenticationHint = authenticationHint;
         SafeMessage = schemaFailure ? "Provider response format is unsupported" : category switch
         {
             ErrorCategory.RateLimited => "Provider rate limit reached",
@@ -35,6 +37,10 @@ public sealed class ProviderReadException : Exception
     public ErrorCategory Category { get; }
     public int? Code { get; }
     public string SafeMessage { get; }
+
+    // Null keeps the previously observed authentication state; providers set this only when they can
+    // confidently classify the failure as missing, expired, rejected, access-denied, or unsupported.
+    public AuthenticationState? AuthenticationHint { get; }
 }
 
 public sealed record CachedProviderState(int SchemaVersion, DateTimeOffset SavedAt, ProviderRuntimeState State);

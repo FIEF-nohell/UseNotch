@@ -35,7 +35,7 @@ public sealed class ClaudeCredentialReader
             try
             {
                 var info = new FileInfo(path);
-                if (!info.Exists) { throw Auth("Claude Code sign-in is required"); }
+                if (!info.Exists) { throw Missing("Claude Code sign-in is required"); }
                 if (info.Length is <= 0 or > MaximumCredentialBytes) { throw Unsupported("Claude Code credential format is unsupported"); }
                 await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, true);
                 using var memory = new MemoryStream();
@@ -49,6 +49,14 @@ public sealed class ClaudeCredentialReader
             catch (IOException) when (attempt == 0)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            }
+            catch (JsonException)
+            {
+                break;
+            }
+            catch (IOException)
+            {
+                break;
             }
         }
         throw Unsupported("Claude Code credential format is unsupported");
@@ -74,8 +82,8 @@ public sealed class ClaudeCredentialReader
         return new ClaudeCredential(accessToken, Fingerprint(accessToken), expiry, subscription);
     }
 
-    private static ProviderReadException Auth(string message) => new(message, false, category: ErrorCategory.Authentication, code: 401);
-    private static ProviderReadException Unsupported(string message) => new(message, false, schemaFailure: true);
+    private static ProviderReadException Missing(string message) => new(message, false, category: ErrorCategory.Authentication, code: 401, authenticationHint: AuthenticationState.Missing);
+    private static ProviderReadException Unsupported(string message) => new(message, false, schemaFailure: true, authenticationHint: AuthenticationState.Unsupported);
 }
 
 public sealed class ClaudeUsageProvider(ClaudeSourceResolver? sources = null, ClaudeCredentialReader? credentials = null, HttpMessageHandler? handler = null, TimeProvider? clock = null) : IUsageProvider
@@ -110,8 +118,14 @@ public sealed class ClaudeUsageProvider(ClaudeSourceResolver? sources = null, Cl
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         var now = _clock.GetUtcNow();
-        if (response.StatusCode == HttpStatusCode.Unauthorized) { throw new ProviderReadException("Credential rejected", false, category: ErrorCategory.Authentication, code: 401); }
-        if (response.StatusCode == HttpStatusCode.Forbidden) { throw new ProviderReadException("Credential forbidden", false, category: ErrorCategory.Forbidden, code: 403); }
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            // The server, not a local JWT decision, confirms the credential no longer works. A past local
+            // expiry hint only refines the message to "expired" versus an outright "rejected" credential.
+            var expired = credential.ExpiryHint is { } expiry && expiry <= now;
+            throw new ProviderReadException(expired ? "Claude Code session expired" : "Credential rejected", false, category: ErrorCategory.Authentication, code: 401, authenticationHint: expired ? AuthenticationState.Expired : AuthenticationState.Rejected);
+        }
+        if (response.StatusCode == HttpStatusCode.Forbidden) { throw new ProviderReadException("Credential forbidden", false, category: ErrorCategory.Forbidden, code: 403, authenticationHint: AuthenticationState.AccessDenied); }
         if (response.StatusCode == (HttpStatusCode)429) { throw new ProviderReadException("Provider rate limit reached", true, serverDeadline: RetryAfterParser.TryParseDeadline(response.Headers.RetryAfter, now), category: ErrorCategory.RateLimited, code: 429); }
         if (!response.IsSuccessStatusCode) { throw new ProviderReadException("Provider request failed", (int)response.StatusCode >= 500, category: ErrorCategory.Network, code: (int)response.StatusCode); }
         if (response.Content.Headers.ContentLength is > MaximumResponseBytes) { throw Unsupported(); }
@@ -126,7 +140,7 @@ public sealed class ClaudeUsageProvider(ClaudeSourceResolver? sources = null, Cl
         catch (IOException) { throw Unsupported(); }
     }
 
-    private static ProviderReadException Unsupported() => new("Provider response format is unsupported", false, schemaFailure: true);
+    private static ProviderReadException Unsupported() => new("Provider response format is unsupported", false, schemaFailure: true, authenticationHint: AuthenticationState.Unsupported);
     private static HttpMessageHandler CreateHandler() => new HttpClientHandler { AllowAutoRedirect = false };
 }
 
@@ -160,7 +174,7 @@ public static class ClaudeUsageParser
 
     private static DateTimeOffset? ReadTimestamp(JsonElement value, string property) => value.TryGetProperty(property, out var timestamp) && timestamp.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(timestamp.GetString(), out var parsed) ? parsed.ToUniversalTime() : null;
     private static string Label(string id) => id switch { "session" => "Current session", "weekly_all" => "All models", "weekly_opus" => "Opus", "weekly_sonnet" => "Sonnet", _ => id.Replace("weekly_", "", StringComparison.Ordinal).Replace('_', ' ') };
-    private static ProviderReadException Unsupported() => new("Provider response format is unsupported", false, schemaFailure: true);
+    private static ProviderReadException Unsupported() => new("Provider response format is unsupported", false, schemaFailure: true, authenticationHint: AuthenticationState.Unsupported);
 }
 
 internal sealed class BoundedClaudeStream(Stream inner, int maximumBytes) : Stream

@@ -418,12 +418,14 @@ public sealed class PollingCoordinator : IAsyncDisposable
             }
 
             var current = _owner._store.Get(_connection.Provider);
+            var previousAccount = current?.Snapshot?.Account.Partition;
+            var accountChanged = previousAccount is not null && previousAccount != snapshot.Account.Partition;
             var candidate = new ProviderRuntimeState(
                 _connection,
                 snapshot,
                 new ProviderStatus(AuthenticationState.Authenticated, DataFreshness.Fresh, _owner._timeProvider.GetUtcNow(), _owner._timeProvider.GetUtcNow(), null, false, null),
                 current?.CredentialGeneration ?? 0,
-                current?.AccountGeneration ?? 0);
+                accountChanged ? (current!.AccountGeneration + 1) : current?.AccountGeneration ?? 0);
             candidate = FreshnessPolicy.Normalize(candidate, _owner._timeProvider.GetUtcNow());
             if (_owner.IsCurrent(this) && _owner._store.TryPublish(candidate))
             {
@@ -445,7 +447,7 @@ public sealed class PollingCoordinator : IAsyncDisposable
             var current = _owner._store.Get(_connection.Provider);
             var lastSuccess = current?.Status.LastSuccess;
             var status = new ProviderStatus(
-                current?.Status.Authentication ?? AuthenticationState.Discovering,
+                exception.AuthenticationHint ?? current?.Status.Authentication ?? AuthenticationState.Discovering,
                 lastSuccess is { } success ? FreshnessPolicy.Evaluate(success, now) : DataFreshness.Unknown,
                 now,
                 lastSuccess,
