@@ -251,13 +251,13 @@ Objective: prove Windows overlay correctness with static cells before live accou
 
 Areas: `OverlayWindow`, `OverlayController`, `IOverlayPlatform`, Windows host, monitor service, placement geometry, interactive test harness.
 
-- [ ] Display a static two-cell borderless transparent overlay with topmost and no-activate behavior applied before first show.
-- [ ] Isolate HWND access and hooks behind the platform boundary. Verify hook APIs exist in the pinned Avalonia version.
-- [ ] Implement tightly bounded native regions for the visible shell and detail area. Do not rely on Avalonia hit testing or `HTTRANSPARENT` alone.
-- [ ] Preserve Avalonia renderer ownership; do not force layered-window operations without validating compatibility.
-- [ ] Implement pure placement math for all four edges, work-area offsets, selected monitor, negative coordinates, and DIP/pixel conversion.
-- [ ] Handle monitor removal and DPI changes without placing the overlay off-screen.
-- [ ] Add a standard-user independent window to validate clicks and wheel input behind transparent regions in a disposable interactive environment.
+- [x] Display a static two-cell borderless transparent overlay with topmost and no-activate behavior applied before first show.
+- [x] Isolate HWND access and hooks behind the platform boundary. Verify hook APIs exist in the pinned Avalonia version.
+- [x] Implement tightly bounded native regions for the visible shell and detail area. Do not rely on Avalonia hit testing or `HTTRANSPARENT` alone.
+- [x] Preserve Avalonia renderer ownership; do not force layered-window operations without validating compatibility.
+- [x] Implement pure placement math for all four edges, work-area offsets, selected monitor, negative coordinates, and DIP/pixel conversion.
+- [x] Handle monitor removal and DPI changes without placing the overlay off-screen.
+- [x] Add a standard-user independent window to validate clicks and wheel input behind transparent regions in a disposable interactive environment.
 - [ ] Record foreground HWND before and after show, hover, expansion, clicking, and refresh.
 - [ ] Validate pointer input at visible controls, transparent corners, detail edges, and after hiding.
 
