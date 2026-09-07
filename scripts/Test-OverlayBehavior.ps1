@@ -204,6 +204,9 @@ function Wait-ForWindow([int]$processId, [string]$title, [int]$timeoutMillisecon
 
 function Invoke-Click([int]$x, [int]$y) {
     [UseNotch.OverlaySmoke.Native]::SetCursorPos($x, $y) | Out-Null
+    # The overlay decides click-through from the cursor position on a short poll, exactly as it does for a
+    # real pointer. Let that settle before pressing, instead of clicking in the same instant as the move.
+    Start-Sleep -Milliseconds 200
     [UseNotch.OverlaySmoke.Native]::mouse_event([UseNotch.OverlaySmoke.Native]::LeftDown, 0, 0, 0, [UIntPtr]::Zero)
     [UseNotch.OverlaySmoke.Native]::mouse_event([UseNotch.OverlaySmoke.Native]::LeftUp, 0, 0, 0, [UIntPtr]::Zero)
 }
@@ -212,6 +215,14 @@ $targetProcess = $null
 $overlayProcess = $null
 $shutdownProcess = $null
 try {
+    if ($NegativeMonitor) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $negativeScreen = [System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.Bounds.X -lt 0 -or $_.Bounds.Y -lt 0 }
+        if (-not $negativeScreen) {
+            throw 'This check needs a secondary monitor placed at negative coordinates. None is attached, so the negative-coordinate case cannot be verified here.'
+        }
+    }
+
     $targetProcess = Start-Process -FilePath $harnessPath -WorkingDirectory $repositoryRoot -PassThru
     $targetWindow = Wait-ForWindow $targetProcess.Id 'UseNotch overlay input target | clicks=0 | wheels=0'
     if ($NegativeMonitor) {
@@ -275,9 +286,10 @@ try {
         throw 'Hovering the overlay stole foreground focus.'
     }
 
-    # The first provider cell sits above the vertical centre once the overlay is expanded.
-    $cellX = $rectangle.Right - 60
-    $cellY = $handleY - 30
+    # Once expanded, the two provider cells are right-aligned and stacked around the vertical centre.
+    # Aim at the middle of the upper cell rather than the gap between them.
+    $cellX = $rectangle.Right - 80
+    $cellY = $handleY - 46
     Invoke-Click $cellX $cellY
     Start-Sleep -Milliseconds 250
     $targetTitleAfterVisibleClick = [UseNotch.OverlaySmoke.Native]::GetTitle($targetWindow)

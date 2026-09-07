@@ -58,7 +58,7 @@ public sealed class OverlayController : IDisposable
         window.UpdateLayout();
         _windowPlatform.Attach(
             handle,
-            window.GetInteractivePixelRegions,
+            window.GetInteractiveRegions,
             OnNativeMetricsChanged);
         window.Opacity = 1;
         ForegroundWindowAfterShow = _windowPlatform.GetForegroundWindow();

@@ -220,10 +220,10 @@ public class OverlayScenarioTests
         {
             window.Show();
             window.SetPresentation(OverlayTrigger.Show);
-            var collapsed = window.GetInteractivePixelRegions();
+            var collapsed = window.GetInteractiveRegions().Regions;
 
             window.SetPresentation(OverlayTrigger.PointerEntered);
-            var expanded = window.GetInteractivePixelRegions();
+            var expanded = window.GetInteractiveRegions().Regions;
 
             Assert.Single(collapsed);
             // The handle is right-aligned and vertically centred, so its region must not sit at the
@@ -253,7 +253,7 @@ public class OverlayScenarioTests
             window.Show();
             window.SetPresentation(OverlayTrigger.Show);
             window.SetPresentation(OverlayTrigger.PointerEntered);
-            var beforeDetails = window.GetInteractivePixelRegions().Count;
+            var beforeDetails = window.GetInteractiveRegions().Regions.Count;
 
             viewModel.ShowDetail(ProviderId.OpenAi);
             window.SetPresentation(OverlayTrigger.PinToggled);
@@ -261,7 +261,7 @@ public class OverlayScenarioTests
 
             Assert.Equal(2, beforeDetails);
             Assert.Equal("UseNotch overlay expanded", window.Title);
-            Assert.Equal(3, window.GetInteractivePixelRegions().Count);
+            Assert.Equal(3, window.GetInteractiveRegions().Regions.Count);
         }
         finally
         {

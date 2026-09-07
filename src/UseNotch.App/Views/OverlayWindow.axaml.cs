@@ -7,7 +7,6 @@ using UseNotch.App.ViewModels;
 using UseNotch.Application;
 using UseNotch.Domain;
 using UseNotch.Platform.Windows.Overlay;
-using OverlayPixelRect = UseNotch.Platform.Windows.Overlay.PixelRect;
 
 namespace UseNotch.App.Views;
 
@@ -41,9 +40,10 @@ public partial class OverlayWindow : Window
 
     /// <summary>
     /// Only what is actually visible becomes interactive. There is no invisible hover-capture padding, so
-    /// clicks outside the drawn surface always reach the window underneath.
+    /// input outside the drawn surface always reaches the window underneath. Regions are reported in this
+    /// window's own device-independent coordinates; the platform layer converts them to pixels.
     /// </summary>
-    public IReadOnlyList<OverlayPixelRect> GetInteractivePixelRegions()
+    public OverlayRegionSnapshot GetInteractiveRegions()
     {
         var interactiveControls = new List<Control>();
         if (CollapsedHandle.IsVisible)
@@ -62,7 +62,7 @@ public partial class OverlayWindow : Window
             interactiveControls.Add(DetailPanel);
         }
 
-        var regions = new List<OverlayPixelRect>();
+        var regions = new List<DipRect>();
         foreach (var control in interactiveControls)
         {
             if (control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
@@ -70,18 +70,17 @@ public partial class OverlayWindow : Window
                 continue;
             }
 
-            // This runs inside the native hit test. Throwing here would fall back to the default window
-            // procedure and make the whole transparent surface capture input, so a control that cannot be
-            // measured yet simply contributes no region.
+            // A control that cannot be measured yet simply contributes no region, so a failure here can
+            // never widen the interactive surface.
             if (control.TranslatePoint(default, this) is not { } origin)
             {
                 continue;
             }
 
-            regions.Add(ToPixelRect(origin, control));
+            regions.Add(new DipRect(origin.X, origin.Y, control.Bounds.Width, control.Bounds.Height));
         }
 
-        return regions;
+        return new OverlayRegionSnapshot(new DipSize(ClientSize.Width, ClientSize.Height), regions);
     }
 
     public void CloseForShutdown()
@@ -140,16 +139,6 @@ public partial class OverlayWindow : Window
             _pendingHoverTrigger = null;
             SetPresentation(trigger);
         }
-    }
-
-    private OverlayPixelRect ToPixelRect(Point point, Control control)
-    {
-        var scale = RenderScaling;
-        var x = (int)Math.Floor(point.X * scale);
-        var y = (int)Math.Floor(point.Y * scale);
-        var right = (int)Math.Ceiling((point.X + control.Bounds.Width) * scale);
-        var bottom = (int)Math.Ceiling((point.Y + control.Bounds.Height) * scale);
-        return new OverlayPixelRect(x, y, right - x, bottom - y);
     }
 
     private void OnOpenAiClicked(object? sender, RoutedEventArgs e) => OpenDetail(ProviderId.OpenAi);

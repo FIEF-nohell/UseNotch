@@ -11,7 +11,7 @@ public interface IOverlayWindowPlatform : IDisposable
 
     void Attach(
         nint windowHandle,
-        Func<IReadOnlyList<PixelRect>> interactiveRegionProvider,
+        Func<OverlayRegionSnapshot> interactiveRegionProvider,
         Action nativeMetricsChanged);
 
     void UpdateInteractiveRegions();
