@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using UseNotch.Application;
 using UseNotch.Domain;
+using UseNotch.Providers.Anthropic;
 using UseNotch.Providers.OpenAI;
 
 namespace UseNotch.Provider.Tests;
@@ -285,5 +286,45 @@ public sealed class CodexUsageProviderTests : IDisposable
             Locations.Add(location);
             return Task.FromResult(value is null ? null : Encoding.UTF8.GetBytes(value));
         }
+    }
+}
+
+public sealed class ClaudeUsageParserTests
+{
+    [Fact]
+    public void Parser_merges_limits_with_named_windows_and_deduplicates_session()
+    {
+        using var document = JsonDocument.Parse("""
+            {"limits":[{"kind":"session","percent":20,"resets_at":"2027-01-15T12:00:00Z"},{"kind":"weekly_opus","percent":70,"resets_at":"2027-01-20T12:00:00Z"}],"five_hour":{"utilization":90,"resets_at":"2027-01-15T13:00:00Z"},"seven_day":{"utilization":30,"resets_at":"2027-01-20T13:00:00Z"}}
+            """);
+
+        var windows = ClaudeUsageParser.Parse(document.RootElement, DateTimeOffset.UtcNow);
+
+        Assert.Collection(windows,
+            session => { Assert.Equal("session", session.Id); Assert.Equal(.2m, session.Limit.UsedFraction); },
+            weeklyAll => { Assert.Equal("weekly_all", weeklyAll.Id); Assert.Equal(.3m, weeklyAll.Limit.UsedFraction); },
+            opus => { Assert.Equal("weekly_opus", opus.Id); Assert.Equal(.7m, opus.Limit.UsedFraction); });
+    }
+
+    [Fact]
+    public void Parser_keeps_a_named_window_with_no_reset_as_an_honest_reading()
+    {
+        using var document = JsonDocument.Parse("""{"five_hour":{"utilization":10}}""");
+
+        var window = Assert.Single(ClaudeUsageParser.Parse(document.RootElement, DateTimeOffset.UtcNow));
+
+        Assert.Equal("session", window.Id);
+        Assert.Null(window.ResetsAt);
+        Assert.Equal(.1m, window.Limit.UsedFraction);
+    }
+
+    [Fact]
+    public void Source_resolution_prefers_explicit_then_environment_then_profile()
+    {
+        var explicitRoot = Path.Combine(Path.GetTempPath(), "claude-explicit");
+        var source = new ClaudeSourceResolver(explicitRoot, Path.Combine(Path.GetTempPath(), "claude-environment"), Path.Combine(Path.GetTempPath(), "claude-profile")).Resolve();
+
+        Assert.Equal(Path.GetFullPath(explicitRoot), source.RootPath);
+        Assert.StartsWith("claude:", source.SourceId, StringComparison.Ordinal);
     }
 }
