@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
@@ -371,14 +372,14 @@ public static class CodexUsageParser
 {
     public static IReadOnlyList<QuotaWindow> Parse(JsonElement root, DateTimeOffset now)
     {
-        if (!root.TryGetProperty("rate_limit", out var rateLimit) || rateLimit.ValueKind != JsonValueKind.Object)
+        if (!TryGetRateLimit(root, out var rateLimit))
         {
             throw new ProviderReadException("Provider response format is unsupported", false, schemaFailure: true);
         }
 
         var result = new List<QuotaWindow>();
-        Add(result, rateLimit, "primary_window", "primary", now);
-        Add(result, rateLimit, "secondary_window", "secondary", now);
+        Add(result, rateLimit, ["primary_window", "five_hour"], "primary", now);
+        Add(result, rateLimit, ["secondary_window", "weekly"], "secondary", now);
         if (result.Count == 0)
         {
             throw new ProviderReadException("Codex reported no usable quota windows", false, schemaFailure: true);
@@ -387,36 +388,132 @@ public static class CodexUsageParser
         return result;
     }
 
-    private static void Add(List<QuotaWindow> result, JsonElement parent, string property, string id, DateTimeOffset now)
+    private static bool TryGetRateLimit(JsonElement root, out JsonElement rateLimit)
     {
-        if (!parent.TryGetProperty(property, out var window) || window.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        if (root.ValueKind != JsonValueKind.Object)
         {
-            return;
+            rateLimit = default;
+            return false;
         }
 
-        if (!window.TryGetProperty("limit_window_seconds", out var durationElement) || !durationElement.TryGetDouble(out var seconds) || seconds <= 0
-            || !window.TryGetProperty("used_percent", out var usedElement))
+        if (TryGetObject(root, "rate_limit", out rateLimit) || TryGetObject(root, "rate_limits", out rateLimit))
         {
-            return;
-        }
-        decimal? percent = usedElement.ValueKind == JsonValueKind.Null ? null : usedElement.TryGetDecimal(out var parsedPercent) && parsedPercent >= 0 ? parsedPercent : null;
-        if (usedElement.ValueKind != JsonValueKind.Null && percent is null)
-        {
-            return;
+            return true;
         }
 
-        DateTimeOffset? reset = null;
-        if (window.TryGetProperty("reset_at", out var absolute) && absolute.TryGetDouble(out var resetSeconds) && resetSeconds > 0)
+        if (TryGetObject(root, "data", out var data)
+            && (TryGetObject(data, "rate_limit", out rateLimit) || TryGetObject(data, "rate_limits", out rateLimit)))
         {
-            reset = DateTimeOffset.FromUnixTimeSeconds((long)resetSeconds);
-        }
-        else if (window.TryGetProperty("reset_after_seconds", out var relative) && relative.TryGetDouble(out var delay) && delay >= 0)
-        {
-            reset = now.AddSeconds(delay);
+            return true;
         }
 
+        rateLimit = default;
+        return false;
+    }
+
+    private static bool TryGetObject(JsonElement parent, string property, out JsonElement value)
+        => parent.TryGetProperty(property, out value) && value.ValueKind == JsonValueKind.Object;
+
+    private static void Add(List<QuotaWindow> result, JsonElement parent, string[] properties, string id, DateTimeOffset now)
+    {
+        foreach (var property in properties)
+        {
+            if (TryGetObject(parent, property, out var window) && TryCreateWindow(window, id, now, out var quotaWindow))
+            {
+                result.Add(quotaWindow);
+                return;
+            }
+        }
+    }
+
+    private static bool TryCreateWindow(JsonElement window, string id, DateTimeOffset now, out QuotaWindow quotaWindow)
+    {
+        quotaWindow = default!;
+        if (!window.TryGetProperty("limit_window_seconds", out var durationElement) || durationElement.ValueKind != JsonValueKind.Number || !durationElement.TryGetDouble(out var seconds) || seconds <= 0
+            || !TryGetUsedPercent(window, out var percent))
+        {
+            return false;
+        }
+
+        var reset = GetReset(window, now);
         var duration = TimeSpan.FromSeconds(seconds);
-        result.Add(new QuotaWindow(id, Label(duration, id), duration, reset - duration, reset, new UsageLimit(null, null, null, percent / 100m, "percent")));
+        quotaWindow = new QuotaWindow(id, Label(duration, id), duration, reset - duration, reset, new UsageLimit(null, null, null, percent / 100m, "percent"));
+        return true;
+    }
+
+    private static bool TryGetUsedPercent(JsonElement window, out decimal? percent)
+    {
+        percent = null;
+        if (window.TryGetProperty("used_percent", out var used))
+        {
+            if (used.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            if (used.ValueKind == JsonValueKind.Number && used.TryGetDecimal(out var parsed) && parsed is >= 0 and <= 100)
+            {
+                percent = parsed;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (window.TryGetProperty("percent_left", out var remaining)
+            && remaining.ValueKind == JsonValueKind.Number
+            && remaining.TryGetDecimal(out var remainingPercent)
+            && remainingPercent is >= 0 and <= 100)
+        {
+            percent = 100m - remainingPercent;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static DateTimeOffset? GetReset(JsonElement window, DateTimeOffset now)
+    {
+        if (window.TryGetProperty("reset_at", out var absolute))
+        {
+            if (absolute.ValueKind == JsonValueKind.Number && absolute.TryGetInt64(out var resetSeconds) && TryFromUnixTimeSeconds(resetSeconds, out var reset))
+            {
+                return reset;
+            }
+
+            if (absolute.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(absolute.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out reset))
+            {
+                return reset;
+            }
+        }
+
+        if (window.TryGetProperty("reset_time_ms", out var milliseconds)
+            && milliseconds.ValueKind == JsonValueKind.Number
+            && milliseconds.TryGetInt64(out var resetMilliseconds)
+            && TryFromUnixTimeMilliseconds(resetMilliseconds, out var resetAtMilliseconds))
+        {
+            return resetAtMilliseconds;
+        }
+
+        return window.TryGetProperty("reset_after_seconds", out var relative)
+            && relative.ValueKind == JsonValueKind.Number
+            && relative.TryGetDouble(out var delay)
+            && delay >= 0
+            ? now.AddSeconds(delay)
+            : null;
+    }
+
+    private static bool TryFromUnixTimeSeconds(long value, out DateTimeOffset timestamp)
+    {
+        try { timestamp = DateTimeOffset.FromUnixTimeSeconds(value); return true; }
+        catch (ArgumentOutOfRangeException) { timestamp = default; return false; }
+    }
+
+    private static bool TryFromUnixTimeMilliseconds(long value, out DateTimeOffset timestamp)
+    {
+        try { timestamp = DateTimeOffset.FromUnixTimeMilliseconds(value); return true; }
+        catch (ArgumentOutOfRangeException) { timestamp = default; return false; }
     }
 
     internal static string Label(TimeSpan duration, string fallback) => duration.TotalMinutes switch

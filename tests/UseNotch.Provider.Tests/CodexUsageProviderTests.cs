@@ -134,6 +134,33 @@ public sealed class CodexUsageProviderTests : IDisposable
             secondary => { Assert.Equal("secondary", secondary.Id); Assert.Equal("Monthly limit", secondary.Scope); Assert.Equal(.2m, secondary.Limit.UsedFraction); });
     }
 
+    [Fact]
+    public void Usage_parser_accepts_legacy_window_aliases_without_retaining_response_data()
+    {
+        using var document = JsonDocument.Parse("""
+            {"rate_limits":{"five_hour":{"limit_window_seconds":18000,"percent_left":87.5,"reset_time_ms":1800003600000},"weekly":{"limit_window_seconds":604800,"percent_left":25,"reset_at":"2027-01-15T12:00:00Z"}}}
+            """);
+
+        var windows = CodexUsageParser.Parse(document.RootElement, DateTimeOffset.FromUnixTimeSeconds(1800000000));
+
+        Assert.Collection(windows,
+            primary => { Assert.Equal("primary", primary.Id); Assert.Equal(.125m, primary.Limit.UsedFraction); Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1800003600000), primary.ResetsAt); },
+            secondary => { Assert.Equal("secondary", secondary.Id); Assert.Equal(.75m, secondary.Limit.UsedFraction); Assert.Equal(DateTimeOffset.Parse("2027-01-15T12:00:00Z"), secondary.ResetsAt); });
+    }
+
+    [Fact]
+    public void Usage_parser_accepts_a_data_wrapped_rate_limit()
+    {
+        using var document = JsonDocument.Parse("""
+            {"data":{"rate_limits":{"five_hour":{"limit_window_seconds":18000,"percent_left":80}}}}
+            """);
+
+        var window = Assert.Single(CodexUsageParser.Parse(document.RootElement, DateTimeOffset.UtcNow));
+
+        Assert.Equal("primary", window.Id);
+        Assert.Equal(.2m, window.Limit.UsedFraction);
+    }
+
     [Theory]
     [InlineData(401, ErrorCategory.Authentication, false)]
     [InlineData(403, ErrorCategory.Forbidden, false)]
