@@ -4,8 +4,8 @@ Build UseNotch as a non-elevated Windows tray application using C#, Avalonia UI 
 
 This plan is based on:
 
-- [Windows port brief](</C:/Users/Noel Hermann/Projects/UseNotch/CODENOTCH_WINDOWS_PORT_BRIEF.md>) and Codenotch commit `743601acd69e701131602b88082fcaeee0c2e88b`.
-- [modshell-cs README](</C:/Users/Noel Hermann/Projects/modshell-cs/README.md>), [project dependencies](</C:/Users/Noel Hermann/Projects/modshell-cs/modshell-cs.csproj>), and [repository instructions](</C:/Users/Noel Hermann/Projects/modshell-cs/AGENTS.md>), at commit `bdaa8979db9b2e006d0f32f9c7dab716630ccd33`.
+- [Windows port brief](CODENOTCH_WINDOWS_PORT_BRIEF.md) and Codenotch commit `743601acd69e701131602b88082fcaeee0c2e88b`.
+- [modshell-cs README](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/README.md), [project dependencies](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/modshell-cs.csproj), and [repository instructions](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/AGENTS.md), at commit `bdaa8979db9b2e006d0f32f9c7dab716630ccd33`.
 - Inspected lifecycle, tray, MVVM, gauge, chart, manifest, installer, and CI source in modshell-cs.
 - Inspected Codenotch provider adapters, credential readers, usage store, archive, activity monitors, overlay geometry, and relevant tests.
 
@@ -123,7 +123,7 @@ Startup sequence:
 
 Closing settings must not terminate the application. Hiding the overlay must not disconnect providers. Quitting must cancel and await owned background work.
 
-The inspected [modshell-cs lifecycle](</C:/Users/Noel Hermann/Projects/modshell-cs/App.axaml.cs>) and [close-to-tray handling](</C:/Users/Noel Hermann/Projects/modshell-cs/Views/MainWindow.axaml.cs>) provide useful patterns. Replace their dependence on one main window with an application-owned lifetime coordinator.
+The inspected [modshell-cs lifecycle](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/App.axaml.cs) and [close-to-tray handling](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/Views/MainWindow.axaml.cs) provide useful patterns. Replace their dependence on one main window with an application-owned lifetime coordinator.
 
 ### Tray behavior
 
@@ -281,7 +281,7 @@ If the installed storage format is not supported, show "Credential storage not s
 
 #### Authentication representation
 
-The inspected [Codex credential reader](</C:/Users/Noel Hermann/Projects/UseNotch/.tmp/codenotch/Sources/Providers/CodexCredentials.swift>) expects a token object containing an access token and account ID. JWT claims supply optional labels and an expiry hint.
+The inspected [Codex credential reader](https://github.com/vinzdg/codenotch/blob/743601acd69e701131602b88082fcaeee0c2e88b/Sources/Providers/CodexCredentials.swift) expects a token object containing an access token and account ID. JWT claims supply optional labels and an expiry hint.
 
 The Windows adapter should:
 
@@ -301,7 +301,7 @@ The inspected adapter calls:
 - `ChatGPT-Account-Id`.
 - JSON accept header.
 
-This is an undocumented integration dependency observed in the repository, not a stable public contract. Keep the endpoint, headers, DTOs, and parsing entirely inside the OpenAI adapter. [Inspected OpenAI adapter](</C:/Users/Noel Hermann/Projects/UseNotch/.tmp/codenotch/Sources/Providers/CodexLocalProvider.swift>)
+This is an undocumented integration dependency observed in the repository, not a stable public contract. Keep the endpoint, headers, DTOs, and parsing entirely inside the OpenAI adapter. [Inspected OpenAI adapter](https://github.com/vinzdg/codenotch/blob/743601acd69e701131602b88082fcaeee0c2e88b/Sources/Providers/CodexLocalProvider.swift)
 
 Disable automatic redirects for authenticated requests. A redirect, HTML challenge, or login page must become a typed failure, not a browser-scraping fallback.
 
@@ -319,7 +319,7 @@ Map the main `rate_limit` primary and secondary windows.
 
 Maintain an explicit headline ID. A missing primary window must not silently turn the ring into a weekly-limit display.
 
-These rules follow important cases in [Codex parser tests](</C:/Users/Noel Hermann/Projects/UseNotch/.tmp/codenotch/Tests/CodexUsageTests.swift>).
+These rules follow important cases in [Codex parser tests](https://github.com/vinzdg/codenotch/blob/743601acd69e701131602b88082fcaeee0c2e88b/Tests/CodexUsageTests.swift).
 
 #### Activity detection
 
@@ -395,7 +395,7 @@ An API-key-only or other authentication mode must show "Quota unavailable for th
 
 #### Usage source
 
-The inspected [Claude OAuth adapter](</C:/Users/Noel Hermann/Projects/UseNotch/.tmp/codenotch/Sources/Providers/ClaudeOAuthProvider.swift>) calls:
+The inspected [Claude OAuth adapter](https://github.com/vinzdg/codenotch/blob/743601acd69e701131602b88082fcaeee0c2e88b/Sources/Providers/ClaudeOAuthProvider.swift) calls:
 
 - `GET https://api.anthropic.com/api/oauth/usage`
 - Bearer authorization.
@@ -422,7 +422,7 @@ Do not reconstruct subscription limits from token logs or monetary usage.
 
 Probe `<ClaudeRoot>\sessions` for supported per-session records.
 
-The inspected records include PID, optional process start time, status or tempo, and timestamps. [Claude session parsing](</C:/Users/Noel Hermann/Projects/UseNotch/.tmp/codenotch/Sources/Sessions/ClaudeSessionRecord.swift>)
+The inspected records include PID, optional process start time, status or tempo, and timestamps. [Claude session parsing](https://github.com/vinzdg/codenotch/blob/743601acd69e701131602b88082fcaeee0c2e88b/Sources/Sessions/ClaudeSessionRecord.swift)
 
 Windows behavior:
 
@@ -658,7 +658,7 @@ MVP does not persist borrowed OAuth tokens. Credential Manager and DPAPI protect
 - Do not refresh or revoke the owning tool's token.
 - Do not broaden source ACLs or request elevation to bypass access restrictions.
 
-The [modshell-cs manifest](</C:/Users/Noel Hermann/Projects/modshell-cs/app.manifest>) requests administrator privileges. UseNotch must instead use `asInvoker` and `uiAccess=false`.
+The [modshell-cs manifest](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/app.manifest) requests administrator privileges. UseNotch must instead use `asInvoker` and `uiAccess=false`.
 
 ### Local file protection
 
@@ -906,7 +906,7 @@ Keep provider identity separate from warning severity. A quota ring can use the 
 
 Use a consistent "% used" convention. Details may additionally show "% remaining". Label the selected window so the percentage has context.
 
-Adapt [modshell-cs gauge geometry](</C:/Users/Noel Hermann/Projects/modshell-cs/Views/GaugeArc.cs>) into a smaller purpose-built control. Its existing gauge is 108 DIP with a 270-degree sweep and fixed hardware thresholds. Do not simply scale that control down. Test 0%, 100%, over-limit values, and full-circle geometry explicitly.
+Adapt [modshell-cs gauge geometry](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/Views/GaugeArc.cs) into a smaller purpose-built control. Its existing gauge is 108 DIP with a 270-degree sweep and fixed hardware thresholds. Do not simply scale that control down. Test 0%, 100%, over-limit values, and full-circle geometry explicitly.
 
 Suggested sizes:
 

@@ -1,0 +1,33 @@
+# Local reference repositories and temporary work
+.tmp/
+.vs/
+.idea/
+*.user
+*.suo
+
+# .NET and test output
+**/bin/
+**/obj/
+TestResults/
+**/TestResults/
+coverage/
+artifacts/
+publish/
+installer/output/
+
+# Local credentials and private diagnostic captures
+.env
+.env.*
+!.env.example
+auth.json
+.credentials.json
+*.pfx
+*.p12
+*.key
+secrets/
+logs/
+diagnostics/
+captures/
+*.dmp
+*.etl
+*.nettrace
