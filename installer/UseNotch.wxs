@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-user installation under LocalAppData. UseNotch runs non-elevated and owns only the current
+  user's data, so nothing here installs per machine, writes to Program Files, or requires elevation.
+  The UpgradeCode is this product's permanent identity and must never change.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="UseNotch"
+           Manufacturer="UseNotch"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="8f3d6c41-5b27-4a19-9d0e-2c7a41f6b8d5"
+           Scope="perUser"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="UseNotch usage overlay for OpenAI Codex and Anthropic Claude Code" />
+
+    <!-- A downgrade is rejected rather than silently installing older files over newer ones. -->
+    <MajorUpgrade AllowDowngrades="no"
+                  DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  Schedule="afterInstallValidate" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Restart Manager can close a running UseNotch instead of forcing a reboot for a locked file. -->
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
+    <util:CloseApplication xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+                           Id="CloseUseNotch"
+                           Target="UseNotch.App.exe"
+                           CloseMessage="yes"
+                           RebootPrompt="no"
+                           Timeout="10" />
+
+    <Feature Id="Main" Title="UseNotch" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentGroupRef Id="ApplicationShortcuts" />
+    </Feature>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="UseNotch" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="UseNotch" />
+    </StandardDirectory>
+
+    <!-- WiX v5 globs the published output directly, so no separate harvest step can drift from it. -->
+    <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="ApplicationShortcuts">
+      <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="2b6f9a7c-51d3-4e88-b0c4-9f5a1e7d3c62">
+        <Shortcut Id="UseNotchShortcut"
+                  Name="UseNotch"
+                  Description="Usage overlay for OpenAI Codex and Anthropic Claude Code"
+                  Target="[INSTALLFOLDER]UseNotch.App.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <!--
+          Uninstall removes the launch-at-login entry this application owns. Settings and cache under
+          LocalAppData\UseNotch are the user's own data and are deliberately left in place.
+        -->
+        <RegistryValue Root="HKCU" Key="Software\UseNotch" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveRegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="UseNotch" />
+        <RemoveRegistryKey Root="HKCU" Key="Software\UseNotch" Action="removeOnUninstall" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M00-M11 are complete. M12-M14 remain open.
+Status: M00-M11 are complete. M12 is implemented and validated except for its disposable-environment install matrix. M12-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,17 +62,17 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M00-M11 are complete. The MVP persistence boundary is verified: a sanitized last-good JSON cache, no history database, and no path by which cached or old-account data can be presented as current |
-| Active milestone | M12, WiX packaging and build/release pipeline validation |
+| Overall state | M00-M11 are complete. M12 produces and validates a per-user MSI from a clean checkout, with packaging and release workflows in place; only its disposable-environment install matrix is outstanding |
+| Active milestone | M12, at the disposable-environment install matrix |
 | Last completed milestone | M11, MVP cache verification and explicit history deferral |
 | Last validated checkpoint | Provider integration checkpoint `637d397` (`chore: checkpoint M07 provider integration`); Codex alternate-schema fix `655ad2f`; overlay regression fix `1203d52`; M06 synthetic checkpoint `929716a`; M05 `5586660`; M00 `4d10e83`; M01 `254447a`; M02 `c15d86a`; M04 `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | The Windows worktree `C:\Users\Noel Hermann\Projects\UseNotch`. The previous session's Linux-side changes were rebuilt and re-tested here and hold |
-| Files currently changed | Committed in the M11 completion commit. No provider credentials or raw account data are present in the repository |
-| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 33/33, Provider 75/75, UI 39/39, Application 133/133, 285 total. `dotnet format --verify-no-changes` and `git diff --check` passed. A full application run left only `cache\OpenAi.json` and `cache\Anthropic.json` under the application data root, both with a null activity value and a 16-character opaque account partition |
-| Next exact action | Begin M12, following its task list in section 4 |
-| Blocking condition | None |
-| Known implementation failures | None outstanding. The overlay behaviour check's negative-coordinate variant cannot run on this machine because only one monitor is attached; it now says so explicitly instead of timing out |
+| Files currently changed | Committed in the M12 progress checkpoint. The package lock files gained a `net8.0/win-x64` section, which the self-contained publish requires for a locked restore. No provider credentials or raw account data are present in the repository |
+| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 33/33, Provider 75/75, UI 39/39, Application 144/144, 296 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `installer/build-installer.ps1` produced `UseNotch-0.1.0-win-x64.msi` (36.4 MB, 231 files) from a clean checkout, and `installer/Test-Installer.ps1` passed every structural check against it |
+| Next exact action | Run the install matrix in a disposable Windows environment: clean install, N-1 upgrade preserving settings, downgrade rejection, uninstall, reinstall, and an interrupted upgrade. Then check M12's last box and make its completion commit. Do not install into the daily environment to close this gate |
+| Blocking condition | M12's install matrix needs a disposable Windows environment, which is not available on this machine |
+| Known implementation failures | None outstanding. The overlay behaviour check's negative-coordinate variant still cannot run here because only one monitor is attached; it says so explicitly instead of timing out |
 | Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts, as is the `.tmp\hang.dmp` capture used to diagnose the earlier shutdown deadlock |
 | Provider data accessed | The signed-in Codex and Claude Code accounts' own local credential files and usage endpoints were read live, as this milestone gate requires. Only percentages, window identifiers, and structural key names left the process; no token, account identifier, email address, or raw response body was printed into this repository |
 
@@ -137,6 +137,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 
 | M11 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Closed the persistence boundary for the first release. Fixed a real gap found by its own test: the JSON cache serialized whatever state it was handed, so a state carrying activity would have written a session label to disk. The cache now strips activity both when writing and when loading, which also guarantees a restored reading can never arrive with stale activity attached. Added a source-identifier check so a cached reading captured from a different credential source is discarded rather than shown while the first live read runs. Verified by test: offline restart serves the last good reading marked cached and stale; a reading older than 24 hours is expired and loses its headline; a window whose reset has passed loses its headline; disconnecting clears both state and cache; a save cannot land after a disconnect, because disconnect awaits the worker first; a corrupt or future-version cache is ignored while the provider still starts; a save leaves no partial file. Confirmed no chart package is referenced and no source mentions a history database or repository. Locked restore, zero-warning Release build, 285 solution tests (Domain 5, Windows 33, Provider 75, UI 39, Application 133), `dotnet format --verify-no-changes`, and `git diff --check` passed. A full application run left only the two sanitized JSON cache files under the application data root, each with a null activity value and an opaque account partition. | `fix: finalize cache recovery rules (M11)` | Begin M12. H01 remains deferred and unchecked; no history interface or implementation exists to maintain |
 
+| M12 partial | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added the per-user WiX v5 MSI, its build script, a structural validator, and the packaging and release workflows. `installer/build-installer.ps1` restores locked dependencies, restores pinned tools, runs the full test suite, publishes self-contained, and packages, stopping at the first failure so partial output cannot be uploaded as success; every directory it clears is proven to be inside the repository before any recursive delete. `installer/Test-Installer.ps1` inspects the built MSI without installing it and checks product identity, the stable upgrade code, version agreement with the application, per-user scope with no Program Files directory, a self-contained payload including the .NET host and runtime, downgrade rejection, and removal of the launch-at-login value on uninstall. The packaging workflow runs for every pull request with bounded retention and no secrets; the release workflow runs only for a pushed tag, keeps read-only default permissions, and creates a draft release. Repository tests enforce these invariants so drift is caught by the ordinary test run. Locked restore, zero-warning Release build, 296 solution tests (Domain 5, Windows 33, Provider 75, UI 39, Application 144), `dotnet format --verify-no-changes`, and `git diff --check` passed. The build produced `UseNotch-0.1.0-win-x64.msi`, 36.4 MB and 231 files, and the validator passed against it. No tag was created or pushed and nothing was published. | `wip: add MSI and packaging pipeline (M12)` | Do not check M12 complete. Clean install, N-1 upgrade, downgrade rejection, uninstall, reinstall, and interrupted upgrade still need a disposable Windows environment, and the plan forbids using the developer's daily environment to close that gate |
+
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
 ### Decisions and deviations log
@@ -160,6 +162,9 @@ Use milestone IDs as checkpoint references until a short hash can be recorded in
 | 2026-09-07 | The overlay window reports interactive regions in device-independent units and the platform converts them | Avalonia reported a render scaling of 1.75 for a window whose client area matched its device-independent size, which placed every region outside the window. Converting with the real client size is correct regardless of what scaling is reported |
 | 2026-09-07 | Persistent history stays deferred as H01 and is not implemented for the first release | The sanitized last-good JSON cache covers the recovery the MVP needs, verified in M11. No history interface, database, or chart dependency exists, so nothing has to be maintained or removed before release |
 | 2026-09-07 | A cached reading is restored only when its source identifier matches the current connection | Otherwise a reading captured from a different credential source, and possibly a different account, would be shown while the first live read is still running |
+| 2026-09-07 | The installer uses the WiX v5 `Files` element instead of a separate harvest step | WiX v5 has no `harvest` command in its CLI, and globbing the published output in the authoring removes the class of failure where a harvested file list drifts from what was actually published |
+| 2026-09-07 | Pinned WiX 5.0.2 as a local tool in `.config/dotnet-tools.json` | A local tool manifest pins the packaging toolchain the same way the SDK and packages are pinned, so a clean checkout builds the same MSI |
+| 2026-09-07 | The release workflow creates a draft release only | Publication is R01 and needs explicit authorization. A draft keeps the pipeline verifiable without publishing anything |
 
 Add dated entries for dependency upgrades, platform limitations, changed provider contracts, and scope changes. Update both plans if a product or architecture decision changes. Do not silently replace requirements with easier behavior.
 
@@ -501,15 +506,15 @@ Objective: produce repeatable, installable Windows artifacts without publishing 
 
 Areas: `installer/UseNotch.wxs`, `installer/build-installer.ps1`, tool pinning, CI/release workflows, version metadata.
 
-- [ ] Adapt the modshell-cs self-contained publish/harvest pattern using a dedicated UseNotch product identity and stable new UpgradeCode.
-- [ ] Implement a per-user install under LocalAppData with consistent per-user shortcuts and registration; do not copy mixed per-machine component assumptions.
-- [ ] Pin WiX v5 and verify architecture/version constraints. Keep installer ProductVersion valid for MSI; map prerelease labels separately if needed.
-- [ ] Verify resolved output/cleanup paths stay inside intended workspace directories before recursive cleanup in build scripts.
-- [ ] Make builds stop on publish, test, packaging, or signing failures rather than uploading partial output as success.
-- [ ] Add pull-request restore/build/test/publish/package validation and bounded artifact retention.
-- [ ] Configure least-privilege release workflow permissions and safe secret handling. Do not expose signing credentials to untrusted PRs.
-- [ ] Implement version agreement between application, installer, and eventual release tag without creating or pushing a tag now.
-- [ ] Define restart/locked-file behavior and uninstall data retention, including removal of startup registration owned by UseNotch.
+- [x] Adapt the modshell-cs self-contained publish/harvest pattern using a dedicated UseNotch product identity and stable new UpgradeCode. The publish is self-contained; WiX v5 globs the published output with its `Files` element, so no separate harvest step can drift from it. The UpgradeCode is new and belongs to UseNotch alone.
+- [x] Implement a per-user install under LocalAppData with consistent per-user shortcuts and registration; do not copy mixed per-machine component assumptions. The package is `Scope="perUser"`, installs under `LocalAppDataFolder`, and its shortcut and registry values are all per user. A test rejects any Program Files or per-machine authoring.
+- [x] Pin WiX v5 and verify architecture/version constraints. Keep installer ProductVersion valid for MSI; map prerelease labels separately if needed. WiX 5.0.2 is pinned in `.config/dotnet-tools.json`, the MSI is built for x64, and the version is validated as major.minor.patch within MSI field ranges. A prerelease label belongs to the release tag, not the ProductVersion.
+- [x] Verify resolved output/cleanup paths stay inside intended workspace directories before recursive cleanup in build scripts. `Assert-InsideWorkspace` resolves a path first and refuses it unless it is inside the repository, and no recursive delete runs without passing through it.
+- [x] Make builds stop on publish, test, packaging, or signing failures rather than uploading partial output as success. The script sets a stopping error preference and checks the exit code of every step, and the packaging workflow validates the MSI before the upload step runs.
+- [x] Add pull-request restore/build/test/publish/package validation and bounded artifact retention. `.github/workflows/package.yml` builds and validates the installer for every pull request, uploads it with a 14-day retention, and fails when no artifact is produced.
+- [x] Configure least-privilege release workflow permissions and safe secret handling. Do not expose signing credentials to untrusted PRs. The release workflow triggers only on a pushed tag, never on a pull request, defaults to read-only permissions and raises them only for the release job, and the packaging workflow references no secret at all. A test enforces each of these.
+- [x] Implement version agreement between application, installer, and eventual release tag without creating or pushing a tag now. The installer takes its version from the build rather than a copy, and `scripts/Test-VersionAgreement.ps1` checks the application, installer, and an optional tag agree. No tag was created or pushed.
+- [x] Define restart/locked-file behavior and uninstall data retention, including removal of startup registration owned by UseNotch. Restart Manager is asked to close a running UseNotch rather than requiring a reboot, uninstall removes the launch-at-login value UseNotch owns, and the user's settings and cache are deliberately retained. All of this is documented in `installer/README.md`.
 - [ ] Validate clean install, upgrade, downgrade rejection, and uninstall in disposable Windows environments.
 
 Acceptance: a clean checkout creates the MSI; standard-user install works without a separately installed runtime; N-1 upgrade preserves settings; uninstall removes installed files and owned startup integration as designed.

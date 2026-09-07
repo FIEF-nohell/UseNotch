@@ -1,0 +1,51 @@
+name: Package
+
+# Validates that a clean checkout produces an installable MSI. It never publishes anything and never
+# receives a signing credential, so it is safe to run for a pull request from a fork.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-installer:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install pinned SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore pinned build tools
+        run: dotnet tool restore
+
+      # The script restores, tests, publishes, and packages, and stops on the first failure, so a
+      # partial result can never be uploaded as a successful package.
+      - name: Build installer
+        run: pwsh -NoProfile -File installer/build-installer.ps1
+
+      - name: Validate installer
+        run: pwsh -NoProfile -File installer/Test-Installer.ps1 -MsiPath (Get-Item artifacts/installer/*.msi).FullName
+
+      - name: Upload installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installer
+          path: artifacts/installer/*.msi
+          if-no-files-found: error
+          retention-days: 14
