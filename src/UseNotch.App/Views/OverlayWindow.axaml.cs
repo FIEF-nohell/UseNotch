@@ -9,11 +9,17 @@ namespace UseNotch.App.Views;
 
 public partial class OverlayWindow : Window
 {
-    private readonly OverlayViewModel _viewModel = new();
+    private readonly OverlayViewModel _viewModel;
     private bool _allowClose;
 
     public OverlayWindow()
+        : this(new OverlayViewModel())
     {
+    }
+
+    public OverlayWindow(OverlayViewModel viewModel)
+    {
+        _viewModel = viewModel;
         InitializeComponent();
         DataContext = _viewModel;
         _viewModel.LoadDevelopmentScenario();
@@ -68,13 +74,13 @@ public partial class OverlayWindow : Window
 
     private void OnOpenAiClicked(object? sender, RoutedEventArgs e)
     {
-        _viewModel.ShowDetail("OpenAI status", "Static OpenAI cell. Usage polling begins in a later milestone.");
+        _viewModel.ShowDetail("OpenAI / Codex status", $"{_viewModel.OpenAiHeadline}. {_viewModel.OpenAiStatusText}.");
         ShowDetail();
     }
 
     private void OnAnthropicClicked(object? sender, RoutedEventArgs e)
     {
-        _viewModel.ShowDetail("Anthropic status", "Static Anthropic cell. Usage polling begins in a later milestone.");
+        _viewModel.ShowDetail("Anthropic / Claude Code status", $"{_viewModel.AnthropicHeadline}. {_viewModel.AnthropicStatusText}.");
         ShowDetail();
     }
 

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../UseNotch.Application/UseNotch.Application.csproj" />
+    <PackageReference Include="Tomlyn" />
   </ItemGroup>
 </Project>

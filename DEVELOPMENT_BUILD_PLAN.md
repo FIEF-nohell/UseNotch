@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M03 native overlay behavior gate is in progress. M00-M02 and M04-M05 are complete; M06-M14 remain open.
+Status: M03 native overlay behavior and M06 live-account validation are open. M00-M02 and M04-M05 are complete; M06-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,19 +62,19 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M05 polling and durable cache foundation complete; M03 native overlay DPI gate remains explicitly open |
-| Active milestone | M06, OpenAI / Codex usage integration |
+| Overall state | M06 implementation is verified with synthetic sources and mock HTTP; its authorized live-account comparison remains open. M03 native overlay DPI gate remains explicitly open |
+| Active milestone | M06, OpenAI / Codex live validation |
 | Last completed milestone | M05 |
 | Last validated checkpoint | M05 completion commit `feat: add polling and state persistence (M05)`; M00 is `4d10e83`, M01 is `254447a`, M02 is `c15d86a`, M04 is `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | M05 implementation and ledger are ready for the M05 completion commit; no provider credentials or raw account data are present |
-| Last verification | Locked restore passed. Release build passed with zero warnings/errors. Test discovery found 72 executable tests across Domain, Application, Windows, and UI projects; all 72 passed. Provider.Tests has no tests by design. Formatting verification and `git diff --check` passed. M03 remains validated only at 100% plus the negative-coordinate monitor run |
-| Next exact action | Create and push `feat: add polling and state persistence (M05)`, then begin M06 source discovery and supported OpenAI / Codex fixtures |
+| Files currently changed | M06 OpenAI provider, provider fixtures/tests, overlay polling binding, central package pin, affected lock files, and this ledger. No provider credentials or raw account data are present |
+| Last verification | Locked restore passed. Release build passed with zero warnings/errors. All 94 executable tests passed: Application 48, Domain 5, Provider 22, Windows 11, UI 8. Formatting verification, `git diff --check`, and `scripts/Test-DesktopLaunch.ps1` passed. M03 remains validated only at 100% plus the negative-coordinate monitor run |
+| Next exact action | Commit the M06 synthetic implementation checkpoint, then perform an authorized real Codex account comparison with `--enable-codex`; validate source, request, snapshot, overlay/details, cache restore, offline behavior, and shutdown. Do not use or record raw credentials |
 | Blocking condition | M03 remains open because this interactive session exposes all monitors at 100%, and per-monitor registry edits did not affect new processes without sign-out. The user requested continuing with M04 before this gate is rerun |
-| Known implementation failures | Provider.Tests intentionally has no tests yet. No known overlay code failure remains at the tested 100% layouts. The harness can lose its foreground-set request when the user changes foreground during an automated run; this is a Windows focus-policy limitation in the harness, not an accepted overlay result |
+| Known implementation failures | M06 has no known synthetic-test failure. Live Windows Credential Manager interoperability, current endpoint compatibility, and account-level quota agreement have not been claimed. The overlay harness can lose its foreground-set request when the user changes foreground during an automated run; this is a Windows focus-policy limitation in the harness, not an accepted overlay result |
 | Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
-| Provider data accessed | Repository source, package metadata, and public documentation only; no live credentials or usage endpoints accessed |
+| Provider data accessed | Repository source, public OpenAI Codex storage source, public keyring implementation documentation, package metadata, and synthetic fixtures only; no live credentials or usage endpoints accessed |
 
 ### Checkpoint protocol for a completed milestone
 
@@ -116,6 +116,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 | M04 | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added immutable domain models, two-provider registry, deterministic network-free fixtures for every required auth/quota/activity state, stable headline and reset-passed semantics, over-limit display clamping, explicit source fidelity, real overlay bindings for both provider cells, and an explicit `--mock-scenario=` development selector. Production has no implicit mock fallback. Release build passed with zero warnings/errors, 23 Application tests, 5 Domain tests, 11 Windows tests, and 8 UI tests passed, formatting passed, and `git diff --check` passed. | `feat: add domain and mock scenarios (M04)` | M03 150% and 200% remain intentionally deferred per the user's instruction. Begin M05 |
 | M05 partial | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Initial state-store and polling implementation checkpoint. | `wip: start M05 polling state` | Continued into the M05 completion checkpoint below |
 | M05 | 2026-09-07, Windows 11 x64, isolated SDK 8.0.424 | Added one independent worker per enabled provider, one in-flight operation per worker, coalesced refresh triggers, active and idle cadence control, linked 15-second attempt and 35-second operation budgets, transient and schema backoff with persisted next-attempt status, generation-safe publication, disconnect/pause/disabled-provider behavior, atomic versioned sanitized JSON cache, corruption/old/future schema recovery, disk-write recovery, cached-startup origin labeling, freshness normalization, reset-passed and expired-headline suppression, UI dispatch of normalized states, safe shutdown, and late-response suppression after disconnect or source rotation. Locked restore passed. Release build passed with zero warnings/errors. Test discovery found 72 executable tests and all 72 passed: Application 48, Domain 5, Windows 11, UI 8. Provider.Tests remains an intentional zero-test scaffold. Formatting verification and `git diff --check` passed. | `feat: add polling and state persistence (M05)` | M03 remains user-deferred and is not part of active work. Begin M06 |
+
+| M06 partial | 2026-09-07, Windows 11 x64 build 26200, isolated SDK 8.0.424 | Added a Codex-only provider with explicit-root, inherited `CODEX_HOME`, then profile-default source resolution; pinned TOML parsing; file, direct Windows Credential Manager, auto, ephemeral, API-key, and unsupported-mode handling; no vault enumeration; a fixed `chatgpt.com` quota request with redirects disabled, 15-second timeout, bounded response, safe HTTP errors and token-rotation retry; primary and secondary quota parsing; opaque account partitioning; and optional `--enable-codex` polling that publishes to the overlay and M05 sanitized cache. Public OpenAI Codex storage source and the documented keyring Windows target convention were inspected. Locked restore, zero-warning Release build, all 94 tests, formatting verification, and `git diff --check` passed. | Uncommitted M06 synthetic checkpoint | The live vertical slice is deliberately open: no local credential or usage endpoint was accessed. Validate the installed Codex version's file/keyring/auto behavior, current endpoint response, account quota agreement, cached offline restart, and shutdown in an authorized environment before checking M06 or starting M07. |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
@@ -330,16 +332,16 @@ Objective: fetch and display honestly scoped Codex quota from a supported native
 
 Areas: OpenAI adapter, source discovery, supported TOML parsing, credential-store bridge, auth/usage DTOs, HTTP mapping, fixtures.
 
-- [ ] Resolve explicit root, effective `CODEX_HOME`, then known user-profile `.codex`; show the selected source in Settings.
-- [ ] Verify the targeted Codex versions' `file`, `keyring`, and `auto` selection rules from authoritative source or documentation and sanitized local tests.
-- [ ] Implement exact supported Windows credential-store target derivation. Do not enumerate unrelated vault entries or silently choose an obsolete file.
-- [ ] Parse supported auth variants; keep tokens private; treat JWT labels/expiry as unverified hints until service acceptance.
-- [ ] Distinguish API-key and unsupported modes from ChatGPT-backed quota authentication.
-- [ ] Implement the isolated usage endpoint request with host allowlisting, disabled authenticated redirects, timeout, bounded body, and safe errors.
-- [ ] Parse main primary/secondary windows and variable durations; exclude unrelated quota categories from the headline.
-- [ ] Handle 401, 403, expiry, account changes, and one retry only when re-read credentials actually changed.
+- [x] Resolve explicit root, effective `CODEX_HOME`, then known user-profile `.codex`; source discovery is available to the M09 Settings surface but Settings itself is not scheduled until M09.
+- [x] Verify the `file`, `keyring`, and `auto` rules against OpenAI Codex `storage.rs` inspected on 2026-09-07 and synthetic TOML fixtures.
+- [x] Implement the exact Windows Credential Manager target derivation used by the documented current keyring mapping, without vault enumeration or stale-file preference.
+- [x] Parse supported auth variants; tokens remain in memory; JWT expiry is a local unverified hint only.
+- [x] Distinguish API-key and unsupported modes from ChatGPT-backed quota authentication.
+- [x] Implement the isolated usage endpoint request with host allowlisting, disabled authenticated redirects, timeout, bounded body, and safe errors.
+- [x] Parse main primary/secondary windows and variable durations; exclude unrelated quota categories from the headline.
+- [x] Handle 401, 403, account changes, and one retry only when re-read credentials actually changed. Expiry remains service-confirmed, not a local JWT decision.
 - [ ] Verify the first live vertical slice: source -> request -> snapshot -> overlay -> details -> sanitized cache -> offline restart -> shutdown.
-- [ ] Record targeted tool versions, supported storage modes, quota scope, and unresolved compatibility explicitly in this ledger.
+- [x] Record targeted source behavior, supported storage modes, quota scope, and unresolved compatibility explicitly in this ledger.
 
 Acceptance: a supported Windows account matches the owning tool's corresponding quota within retrieval timing; every unsupported mode explains itself; account changes do not show old readings as current. File-only success is not general OS-store compatibility.
 

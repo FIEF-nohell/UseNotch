@@ -321,6 +321,7 @@
       "usenotch.providers.openai": {
         "type": "Project",
         "dependencies": {
+          "Tomlyn": "[2.10.1, )",
           "UseNotch.Application": "[0.1.0, )"
         }
       },
@@ -371,6 +372,12 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.2"
         }
+      },
+      "Tomlyn": {
+        "type": "CentralTransitive",
+        "requested": "[2.10.1, )",
+        "resolved": "2.10.1",
+        "contentHash": "ykjOY3IpYmC4SpPcAZRTl/w2jTmhPMDydHq8xcV7tTBAQ22nKBsOkPqauIrZlMjHm03cmKfV23UOPscKp+J4Og=="
       }
     }
   }

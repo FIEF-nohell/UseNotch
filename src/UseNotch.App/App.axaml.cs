@@ -8,7 +8,9 @@ using UseNotch.App.Overlay;
 using UseNotch.App.ViewModels;
 using UseNotch.App.Views;
 using UseNotch.Application;
+using UseNotch.Domain;
 using UseNotch.Platform.Windows.Overlay;
+using UseNotch.Providers.OpenAI;
 
 namespace UseNotch.App;
 
@@ -19,6 +21,8 @@ public partial class App : Avalonia.Application
     private static int _shutdownRequested;
     private AppLifecycleCoordinator? _lifecycleCoordinator;
     private OverlayController? _overlayController;
+    private PollingCoordinator? _pollingCoordinator;
+    private readonly OverlayViewModel _overlayViewModel = new();
 
     internal static void RequestActivation()
     {
@@ -55,7 +59,7 @@ public partial class App : Avalonia.Application
             _overlayController = new OverlayController(
                 new Win32MonitorService(),
                 new Win32OverlayWindowPlatform(),
-                () => new OverlayWindow());
+                () => new OverlayWindow(_overlayViewModel));
 
             if (Interlocked.Exchange(ref _shutdownRequested, 0) == 1)
             {
@@ -84,6 +88,12 @@ public partial class App : Avalonia.Application
                         ?.Id;
                 }
 
+                _overlayController.Show();
+            }
+
+            if (HasArgument("--enable-codex"))
+            {
+                StartCodexPolling();
                 _overlayController.Show();
             }
 
@@ -117,6 +127,8 @@ public partial class App : Avalonia.Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         SetTrayVisibility(false);
+        _pollingCoordinator?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _pollingCoordinator = null;
         _overlayController?.Dispose();
         _overlayController = null;
         _lifecycleCoordinator?.Dispose();
@@ -127,6 +139,20 @@ public partial class App : Avalonia.Application
     private static bool HasArgument(string expectedArgument) =>
         Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
+
+    private void StartCodexPolling()
+    {
+        var cacheRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "UseNotch",
+            "cache");
+        _pollingCoordinator = new PollingCoordinator(
+            [new CodexUsageProvider()],
+            new InMemoryUsageStateStore(),
+            cache: new JsonUsageCache(cacheRoot),
+            onPublished: state => Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(state)));
+        _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "codex:default", true, 1));
+    }
 
     private void SetTrayVisibility(bool isVisible)
     {

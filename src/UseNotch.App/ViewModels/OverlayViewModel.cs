@@ -79,6 +79,41 @@ public partial class OverlayViewModel : ObservableObject
         }
     }
 
+    public void ApplyRuntimeState(ProviderRuntimeState state)
+    {
+        var headline = state.Snapshot?.Headline?.Limit.UsedFraction is { } fraction
+            ? $"{fraction * 100:0}% used"
+            : state.Snapshot?.Headline is null ? "Awaiting updated window" : "-";
+        var status = state.Status.Authentication switch
+        {
+            AuthenticationState.Authenticated => state.Status.Freshness switch
+            {
+                DataFreshness.Fresh => "Connected",
+                DataFreshness.Stale => "Stale",
+                DataFreshness.Expired => "Expired reading",
+                _ => "Reading unavailable",
+            },
+            AuthenticationState.Missing => "Sign in required",
+            AuthenticationState.Expired => "Session expired",
+            AuthenticationState.Rejected => "Access rejected",
+            AuthenticationState.AccessDenied => "Access denied",
+            AuthenticationState.Unsupported => "Unsupported",
+            _ => state.Status.Error?.SafeMessage ?? "Loading",
+        };
+        if (state.Connection.Provider == ProviderId.OpenAi)
+        {
+            OpenAiHeadline = headline;
+            OpenAiStatusText = status;
+            StatusText = status;
+            DetailText = $"OpenAI / Codex quota. {headline}. {status}.";
+        }
+        else
+        {
+            AnthropicHeadline = headline;
+            AnthropicStatusText = status;
+        }
+    }
+
     public void ShowDetail(string title, string detail)
     {
         DetailTitle = title;
