@@ -62,7 +62,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $notes = @"
+          Release candidate built from ${{ github.sha }}.
+
+          The MSI is a per-user, self-contained package. It installs under the local application
+          data folder, needs no administrator rights and no separately installed .NET runtime,
+          rejects a downgrade, and removes its own launch-at-login entry on uninstall. Settings and
+          cache are deliberately kept.
+
+          Verified for this build: locked restore, a zero-warning Release build, the full test
+          suite, formatting, and the installer structure check.
+
+          Not yet verified, which is why this stays a draft:
+
+          - The artifact is not signed. Signing is part of release hardening and has not been done.
+          - Clean install, upgrade, downgrade, uninstall, and interrupted upgrade have not been run
+            in a disposable Windows environment.
+          - .NET 8 leaves support on 2026-11-10. Confirm the runtime against the shipping date.
+
+          Publishing this draft is a separate, deliberate decision.
+          "@
           gh release create "${{ github.ref_name }}" (Get-Item artifacts/installer/*.msi).FullName `
             --draft `
             --title "UseNotch ${{ github.ref_name }}" `
-            --notes "Draft release. Publication requires explicit authorization."
+            --notes $notes
