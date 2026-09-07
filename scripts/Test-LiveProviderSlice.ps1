@@ -256,16 +256,14 @@ try {
     Write-Output '  bounded shutdown completed'
 
     Write-Output 'Phase 2: offline restart from the sanitized cache'
-    # .NET resolves its default proxy from the per-user WinINET settings on Windows and ignores the
-    # HTTP_PROXY environment variables there, so point that setting at an unreachable local port. This is
-    # a current-user registry value, needs no elevation, and is restored in the finally block below.
-    $proxyKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-    $originalProxy = Get-ItemProperty -Path $proxyKey
-    $originalEnable = $originalProxy.ProxyEnable
-    $originalServer = $originalProxy.ProxyServer
+    # Point the inherited proxy environment at an unreachable local port. The launched application picks
+    # this up through HttpClient's default proxy, which fails every request without changing any machine
+    # or user network setting.
+    $environment = @{ 'HTTPS_PROXY' = 'http://127.0.0.1:1'; 'HTTP_PROXY' = 'http://127.0.0.1:1'; 'ALL_PROXY' = 'http://127.0.0.1:1' }
+    foreach ($pair in $environment.GetEnumerator()) {
+        Set-Item -Path "Env:$($pair.Key)" -Value $pair.Value
+    }
     try {
-        Set-ItemProperty -Path $proxyKey -Name 'ProxyServer' -Value '127.0.0.1:1'
-        Set-ItemProperty -Path $proxyKey -Name 'ProxyEnable' -Value 1 -Type DWord
         $offline = Start-Process -FilePath $applicationPath -ArgumentList $arguments -WorkingDirectory $repositoryRoot -PassThru
         Wait-ForWindow $offline.Id 'UseNotch overlay' | Out-Null
 
@@ -304,20 +302,9 @@ try {
         $offline = $null
     }
     finally {
-        if ($null -eq $originalServer) {
-            Remove-ItemProperty -Path $proxyKey -Name 'ProxyServer' -ErrorAction SilentlyContinue
+        foreach ($key in $environment.Keys) {
+            Remove-Item -Path "Env:$key" -ErrorAction SilentlyContinue
         }
-        else {
-            Set-ItemProperty -Path $proxyKey -Name 'ProxyServer' -Value $originalServer
-        }
-        if ($null -eq $originalEnable) {
-            Remove-ItemProperty -Path $proxyKey -Name 'ProxyEnable' -ErrorAction SilentlyContinue
-        }
-        else {
-            Set-ItemProperty -Path $proxyKey -Name 'ProxyEnable' -Value $originalEnable -Type DWord
-        }
-        $restored = Get-ItemProperty -Path $proxyKey
-        Write-Output "  restored proxy settings: enable=$($restored.ProxyEnable) server=$($restored.ProxyServer)"
     }
 
     Write-Output 'PASS: live source, request, snapshot, overlay, detail pane, sanitized cache, offline restart from cache, and bounded shutdown.'

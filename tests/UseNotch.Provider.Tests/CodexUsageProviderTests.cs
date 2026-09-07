@@ -231,6 +231,21 @@ public sealed class CodexUsageProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task Transport_failures_become_transient_errors_instead_of_escaping_the_adapter()
+    {
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(Path.Combine(_root, "auth.json"), "{\"tokens\":{\"access_token\":\"synthetic.token\",\"account_id\":\"synthetic-account\"}}", CancellationToken.None);
+        var provider = CreateProvider(new ThrowingHandler(new HttpRequestException("connection refused (127.0.0.1:1)")));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(new ProviderConnection(ProviderId.OpenAi, "test", true, 1), CancellationToken.None));
+
+        Assert.True(exception.IsTransient);
+        Assert.False(exception.IsSchemaFailure);
+        Assert.Equal(ErrorCategory.Network, exception.Category);
+        Assert.Equal("Provider request failed", exception.SafeMessage);
+    }
+
+    [Fact]
     public async Task Usage_request_sends_only_to_allowlisted_endpoint_and_returns_sanitized_snapshot()
     {
         await WriteAuthAsync("token.one.signature", "account-private");
@@ -562,6 +577,20 @@ public sealed class ClaudeUsageProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task Transport_failures_become_transient_errors_instead_of_escaping_the_adapter()
+    {
+        await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
+        var provider = CreateProvider(new ThrowingHandler(new HttpRequestException("connection refused (127.0.0.1:1)")));
+
+        var exception = await Assert.ThrowsAsync<ProviderReadException>(() => provider.ReadAsync(Connection(), CancellationToken.None));
+
+        Assert.True(exception.IsTransient);
+        Assert.False(exception.IsSchemaFailure);
+        Assert.Equal(ErrorCategory.Network, exception.Category);
+        Assert.Equal("Provider request failed", exception.SafeMessage);
+    }
+
+    [Fact]
     public async Task Oversized_response_is_a_safe_schema_failure()
     {
         await WriteCredentialsAsync("{\"claudeAiOauth\":{\"accessToken\":\"synthetic.token\"}}");
@@ -602,4 +631,9 @@ public sealed class ClaudeUsageProviderTests : IDisposable
             return Task.FromResult(response(request));
         }
     }
+}
+
+internal sealed class ThrowingHandler(Exception failure) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => throw failure;
 }

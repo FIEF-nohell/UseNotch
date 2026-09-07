@@ -376,6 +376,19 @@ public sealed class PollingCoordinator : IAsyncDisposable
                             continue;
                         }
                     }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        // An adapter that throws something unmapped must not silently kill this provider's
+                        // worker. Treat it as a transient failure, publish it safely, and back off.
+                        var now = _owner._timeProvider.GetUtcNow();
+                        var nextAttempt = BackoffPolicy.NextAttempt(now, ++_transientFailures, null);
+                        await PublishFailureAsync(new ProviderReadException("Provider request failed", true), now, nextAttempt).ConfigureAwait(false);
+                        var delay = nextAttempt - _owner._timeProvider.GetUtcNow();
+                        if (delay > TimeSpan.Zero)
+                        {
+                            await Task.Delay(delay, _owner._timeProvider, _stop.Token).ConfigureAwait(false);
+                        }
+                    }
                     Request(RefreshReason.Timer);
                 }
             }
@@ -464,7 +477,12 @@ public sealed class PollingCoordinator : IAsyncDisposable
                 current?.Snapshot,
                 status,
                 current?.CredentialGeneration ?? 0,
-                current?.AccountGeneration ?? 0);
+                current?.AccountGeneration ?? 0)
+            {
+                // A failed attempt does not turn a restored reading into a live one. Keep the origin of the
+                // reading that is still being shown until a successful read replaces it.
+                Origin = current?.Origin ?? StateOrigin.Live,
+            };
             if (_owner._store.TryPublish(candidate))
             {
                 if (_owner._cache is not null)

@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M06's offline-restart leg of the live vertical slice is open. M00-M05 and M07 are complete; M06 and M08-M14 remain open.
+Status: M00-M07 are complete. M08-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,18 +62,18 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M07 is complete and committed. M06 is implemented and passed every live-slice leg except the offline restart. A shutdown deadlock that hung the app whenever polling was active was found by dump analysis and fixed |
-| Active milestone | M06, closing the offline-restart leg of the live vertical slice |
-| Last completed milestone | M07 (M06 remains open on its offline-restart verification only) |
+| Overall state | M00-M07 are complete and verified, including the full live vertical slice against both real provider accounts. Three product defects found by that slice are fixed: unmapped transport failures, a worker that died on an unmapped exception, and a lost cached-startup origin label |
+| Active milestone | M08, conservative local activity monitoring |
+| Last completed milestone | M07, with M06 completed immediately before it in the same session |
 | Last validated checkpoint | Provider integration checkpoint `637d397` (`chore: checkpoint M07 provider integration`); Codex alternate-schema fix `655ad2f`; overlay regression fix `1203d52`; M06 synthetic checkpoint `929716a`; M05 `5586660`; M00 `4d10e83`; M01 `254447a`; M02 `c15d86a`; M04 `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | The Windows worktree `C:\Users\Noel Hermann\Projects\UseNotch`. The previous session's Linux-side changes were rebuilt and re-tested here and hold |
-| Files currently changed | Committed in this session's M07 completion commit. No provider credentials or raw account data are present in the repository |
-| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). `dotnet restore --locked-mode`, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 11/11, Provider 47/47, UI 9/9, Application 53/53, 125 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `pwsh -NoProfile -File scripts/Test-LiveProviderSlice.ps1` passed phase 1 end to end against both live accounts |
-| Next exact action | Give `scripts/Test-LiveProviderSlice.ps1` an offline simulation that works in a non-elevated session, rerun it, then check M06's live-slice box and make the M06 completion commit. The per-user WinINET proxy approach currently in the script did not make .NET's requests fail, so a different mechanism is needed |
-| Blocking condition | None for M07. M06 is blocked only on producing a real network failure for the offline-restart leg without elevation |
-| Known implementation failures | The previously recorded shutdown hang is fixed and covered by a regression test; the app now exits about 180 ms after the bounded shutdown signal with polling active. The overlay harness can still lose its foreground-set request when the user changes foreground during an automated run |
-| Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts. `.tmp\hang.dmp`, the dump used to find the shutdown deadlock, is ignored local data and contains process memory, so it must not be committed |
+| Files currently changed | Committed in the M06 completion commit. No provider credentials or raw account data are present in the repository |
+| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 11/11, Provider 49/49, UI 9/9, Application 55/55, 129 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `pwsh -NoProfile -File scripts/Test-LiveProviderSlice.ps1` passed both phases end to end |
+| Next exact action | Begin M08, conservative local activity monitoring, following its task list in section 4 |
+| Blocking condition | None |
+| Known implementation failures | None outstanding. The overlay harness can still lose its foreground-set request when the user changes foreground during an automated run, which is a Windows focus-policy limitation of the harness rather than an overlay result |
+| Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts, as is the `.tmp\hang.dmp` capture used to diagnose the earlier shutdown deadlock |
 | Provider data accessed | The signed-in Codex and Claude Code accounts' own local credential files and usage endpoints were read live, as this milestone gate requires. Only percentages, window identifiers, and structural key names left the process; no token, account identifier, email address, or raw response body was printed into this repository |
 
 ### Checkpoint protocol for a completed milestone
@@ -125,6 +125,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 
 | M07 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Closed the live inspection gate against Claude Code 2.1.263 and a live `/api/oauth/usage` response, recording the real credential and response layout in the M07 checklist above. Added scoped-window identity so the observed repeated `weekly_scoped` entries no longer collapse into one, labelling each from `scope.model.display_name`. Wired opt-in `--enable-claude` polling next to `--enable-codex`, with one independent worker each, and corrected the overlay's Anthropic cell to show its headline rather than its status. Fixed a Codex credential bug where a signed-in ChatGPT installation was misread as API-key authentication because `auth.json` carries a null `OPENAI_API_KEY`; `auth_mode` now decides, and only a non-empty key counts. Fixed a shutdown deadlock, located with a full process dump, where exit blocked the UI thread on the polling dispose while a worker await needed that same thread: worker awaits no longer capture a synchronization context, and exit now disposes on the thread pool under a five-second budget. Added a regression test that disposes the coordinator from a thread owning a non-pumping synchronization context, and deflaked the account-epoch test. Locked restore, zero-warning Release build, 125 solution tests (Domain 5, Windows 11, Provider 47, UI 9, Application 53), `dotnet format --verify-no-changes`, and `git diff --check` all passed. `scripts/Test-LiveProviderSlice.ps1` phase 1 passed against both live accounts: Codex reported 53 percent of its 5h window and 8 percent weekly, Claude reported its session, all-models, and Fable scoped windows, both cache files were written with no credential material, both overlay cells opened the detail pane, and the app exited cleanly about 180 ms after the bounded shutdown signal. | `feat: integrate Claude usage (M07)` | M06's offline-restart leg is the only remaining live-slice item. The per-user WinINET proxy the script sets is restored after the run but does not actually fail .NET's requests, so phase 2 needs a different non-elevated network-failure mechanism |
 
+| M06 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Closed the live vertical slice with `scripts/Test-LiveProviderSlice.ps1`, which passed every leg: local source discovery, live request, snapshot, overlay window, detail pane from both cells, sanitized cache files, offline restart served from that cache, and bounded shutdown. Running it exposed three real defects, all fixed here. A plain transport failure threw `HttpRequestException`, which neither adapter mapped, so the polling worker died silently and no failure was ever published; both adapters now turn connection, DNS, TLS, and proxy failures into transient network errors. The worker loop now also catches any unmapped exception, publishes a safe transient failure and backs off, so one adapter defect can no longer stop a provider permanently. A failed attempt used to relabel a restored reading as live; the cached-startup origin is now preserved until a successful read replaces it. The offline leg is simulated with an unreachable proxy in the launched process's environment, which needs no elevation and changes no machine or user network setting. Locked restore, zero-warning Release build, 129 solution tests (Domain 5, Windows 11, Provider 49, UI 9, Application 55), `dotnet format --verify-no-changes`, and `git diff --check` passed. Live agreement check: the snapshot percentages matched the values the provider endpoints reported for the same windows in the same run. | `feat: integrate Codex usage (M06)` | Begin M08. No unresolved M06 compatibility issue remains |
+
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
 ### Decisions and deviations log
@@ -154,7 +156,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M03: Native overlay prototype and Windows behavior gate.
 - [x] M04: Shared domain, mock provider, and complete state fixtures.
 - [x] M05: Polling, concurrency, state store, and JSON cache.
-- [ ] M06: OpenAI / Codex usage integration.
+- [x] M06: OpenAI / Codex usage integration.
 - [x] M07: Anthropic / Claude Code usage integration.
 - [ ] M08: Conservative local activity monitoring.
 - [ ] M09: Settings, privacy, source selection, and startup.
@@ -346,7 +348,7 @@ Areas: OpenAI adapter, source discovery, supported TOML parsing, credential-stor
 - [x] Implement the isolated usage endpoint request with host allowlisting, disabled authenticated redirects, timeout, bounded body, and safe errors.
 - [x] Parse main primary/secondary windows and variable durations; exclude unrelated quota categories from the headline.
 - [x] Handle 401, 403, account changes, and one retry only when re-read credentials actually changed. Expiry remains service-confirmed, not a local JWT decision.
-- [ ] Verify the first live vertical slice: source -> request -> snapshot -> overlay -> details -> sanitized cache -> offline restart -> shutdown. Every leg except the offline restart passed on 2026-09-07 through `scripts/Test-LiveProviderSlice.ps1`; the offline leg still needs a network-failure simulation that this machine's non-elevated session can actually produce.
+- [x] Verify the first live vertical slice: source -> request -> snapshot -> overlay -> details -> sanitized cache -> offline restart -> shutdown. `scripts/Test-LiveProviderSlice.ps1` passed every leg on 2026-09-07 against the signed-in Codex and Claude Code accounts.
 - [x] Record targeted source behavior, supported storage modes, quota scope, and unresolved compatibility explicitly in this ledger.
 
 Acceptance: a supported Windows account matches the owning tool's corresponding quota within retrieval timing; every unsupported mode explains itself; account changes do not show old readings as current. File-only success is not general OS-store compatibility.

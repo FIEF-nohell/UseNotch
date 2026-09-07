@@ -333,7 +333,18 @@ public sealed class CodexUsageProvider : IUsageProvider
         request.Headers.TryAddWithoutValidation("ChatGPT-Account-Id", credential.AccountId);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
-        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        HttpResponseMessage response;
+        try
+        {
+            response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            // DNS, TLS, proxy, and connection failures are transient transport problems, not a reason to
+            // lose the last good reading or to stop polling this provider.
+            throw new ProviderReadException("Provider request failed", true, category: ErrorCategory.Network);
+        }
+        using var responseScope = response;
         var now = _clock.GetUtcNow();
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {

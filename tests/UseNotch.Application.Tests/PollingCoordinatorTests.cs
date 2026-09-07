@@ -398,6 +398,97 @@ public class PollingCoordinatorTests
         public override void Send(SendOrPostCallback callback, object? state) => Interlocked.Increment(ref _postCount);
     }
 
+    [Fact]
+    public async Task An_unmapped_adapter_exception_is_published_safely_and_keeps_the_worker_alive()
+    {
+        var provider = new SequencedProvider(
+            _ => throw new InvalidOperationException("adapter defect with account detail"),
+            _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-a")));
+        var store = new InMemoryUsageStateStore();
+        await using var coordinator = new PollingCoordinator(
+            [provider],
+            store,
+            options: new PollingOptions(TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)),
+            timeProvider: new AcceleratedTimeProvider());
+        coordinator.Start(new ProviderConnection(ProviderId.OpenAi, "mock", true, 1));
+
+        var failed = await WaitForStateAsync(store, ProviderId.OpenAi);
+        Assert.NotNull(failed.Status.Error);
+        Assert.Equal("Provider request failed", failed.Status.Error!.SafeMessage);
+        Assert.DoesNotContain("account detail", failed.Status.Error.SafeMessage, StringComparison.Ordinal);
+        Assert.NotNull(failed.Status.NextAttempt);
+
+        ProviderRuntimeState recovered = failed;
+        for (var attempt = 0; attempt < 400 && recovered.Snapshot is null; attempt++)
+        {
+            await Task.Delay(10);
+            recovered = store.Get(ProviderId.OpenAi)!;
+        }
+
+        Assert.NotNull(recovered.Snapshot);
+        Assert.Equal("account-a", recovered.Snapshot!.Account.Partition);
+    }
+
+    [Fact]
+    public async Task A_failed_attempt_keeps_the_cached_startup_origin_of_the_reading_it_still_shows()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "usenotch-cache-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var window = new QuotaWindow("session", "session", TimeSpan.FromHours(5), now.AddMinutes(-5), now.AddHours(4), new UsageLimit(1, 4, 5, .2m, "requests"));
+            var snapshot = new UsageSnapshot(ProviderId.OpenAi, new AccountScope("account", IdentityConfidence.LocalPartition), now.AddMinutes(-5), [window], "session", new SourceDescriptor("test", "cache", true), null);
+            var cached = new ProviderRuntimeState(
+                new ProviderConnection(ProviderId.OpenAi, "mock", true, 1),
+                snapshot,
+                new ProviderStatus(AuthenticationState.Authenticated, DataFreshness.Fresh, now.AddMinutes(-5), now.AddMinutes(-5), null, false, null),
+                1,
+                1);
+            var cache = new JsonUsageCache(root);
+            await cache.SaveAsync(cached, CancellationToken.None);
+            var provider = new SequencedProvider(_ => throw new ProviderReadException("Provider request failed", true));
+            var store = new InMemoryUsageStateStore();
+            await using var coordinator = new PollingCoordinator(
+                [provider],
+                store,
+                options: new PollingOptions(TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)),
+                cache: cache);
+
+            await coordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "mock", true, 2));
+
+            ProviderRuntimeState state = await WaitForStateAsync(store, ProviderId.OpenAi);
+            for (var attempt = 0; attempt < 200 && state.Status.Error is null; attempt++)
+            {
+                await Task.Delay(10);
+                state = store.Get(ProviderId.OpenAi)!;
+            }
+
+            Assert.NotNull(state.Status.Error);
+            Assert.NotNull(state.Snapshot);
+            Assert.Equal(StateOrigin.CachedStartup, state.Origin);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    // The first transient backoff is a minute of real time. Compressing only the timer keeps the policy
+    // itself under test while letting the retry actually happen inside a test run.
+    private sealed class AcceleratedTimeProvider : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => base.CreateTimer(callback, state, Compress(dueTime), Compress(period));
+
+        private static TimeSpan Compress(TimeSpan value)
+            => value == Timeout.InfiniteTimeSpan || value <= TimeSpan.Zero
+                ? value
+                : TimeSpan.FromMilliseconds(Math.Max(1, value.TotalMilliseconds / 1000));
+    }
+
     private sealed class BlockingProvider : IUsageProvider
     {
         public ProviderId Provider => ProviderId.OpenAi;
