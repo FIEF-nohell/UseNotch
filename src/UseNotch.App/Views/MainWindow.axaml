@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UseNotch.App.ViewModels"
+        x:Class="UseNotch.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding Title}"
+        Width="480" Height="200"
+        MinWidth="360" MinHeight="180"
+        Background="#101216"
+        FontFamily="Segoe UI"
+        WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="24" Spacing="12" VerticalAlignment="Center">
+    <TextBlock Text="{Binding Title}"
+               FontSize="20" FontWeight="SemiBold" Foreground="#F2F4F7" />
+    <TextBlock x:Name="StatusText"
+               Text="{Binding StatusMessage}"
+               FontSize="14" Foreground="#B3BBC7" TextWrapping="Wrap" />
+  </StackPanel>
+</Window>

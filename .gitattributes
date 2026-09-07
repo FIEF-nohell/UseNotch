@@ -1,0 +1,14 @@
+* text=auto
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.config text eol=lf
+*.manifest text eol=lf
+*.axaml text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.ps1 text eol=lf
+*.sln text eol=crlf

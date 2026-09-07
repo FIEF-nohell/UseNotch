@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/UseNotch.Application/UseNotch.Application.csproj" />
+  </ItemGroup>
+</Project>

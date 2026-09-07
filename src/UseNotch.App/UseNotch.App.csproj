@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../UseNotch.Application/UseNotch.Application.csproj" />
+    <ProjectReference Include="../UseNotch.Infrastructure/UseNotch.Infrastructure.csproj" />
+    <ProjectReference Include="../UseNotch.Platform.Windows/UseNotch.Platform.Windows.csproj" />
+    <ProjectReference Include="../UseNotch.Providers.OpenAI/UseNotch.Providers.OpenAI.csproj" />
+    <ProjectReference Include="../UseNotch.Providers.Anthropic/UseNotch.Providers.Anthropic.csproj" />
+  </ItemGroup>
+</Project>

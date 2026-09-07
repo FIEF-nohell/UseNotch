@@ -101,6 +101,8 @@ Persistent history charts, multiple simultaneous accounts, WSL activity, and aut
 
 modshell-cs currently uses Avalonia `11.2.5`, CommunityToolkit.Mvvm `8.4.2`, FluentAvaloniaUI `2.4.0`, and LiveCharts2 `2.0.5`. Treat these as an inspected compatibility baseline, not an instruction to freeze every dependency indefinitely.
 
+M01 implementation checkpoint (2026-09-07): the foundation pins SDK `8.0.424`, Avalonia `11.3.20` with FluentTheme, CommunityToolkit.Mvvm `8.4.2`, and logging abstractions `8.0.3`. Package versions and transitive lock files are tracked. The updated Avalonia 11 set passed a clean Release build, compiled-XAML tests, and native standard-user startup checks. No FluentAvaloniaUI, chart, hardware-monitor, SQLite, or provider integration implementation is included in this checkpoint. See `DEVELOPMENT_BUILD_PLAN.md` for exact evidence and remaining milestones.
+
 Use a single Avalonia theme stack. Start with Fluent styling and application-specific resource tokens. Add FluentAvalonia controls only where their value is concrete. Do not import hardware-monitor dependencies or LiveCharts for the two quota rings.
 
 .NET 8 reaches end of support on November 10, 2026. Because this plan is dated September 2026, schedule a supported-LTS migration before that date. If the first production release occurs afterward, perform that migration before shipping. This is a release-maintenance requirement, not a reason to abandon the C#/Avalonia architecture. [Microsoft lifecycle](https://learn.microsoft.com/en-us/lifecycle/products/microsoft-net-and-net-core)

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/UseNotch.Providers.OpenAI/UseNotch.Providers.OpenAI.csproj" />
+    <ProjectReference Include="../../src/UseNotch.Providers.Anthropic/UseNotch.Providers.Anthropic.csproj" />
+  </ItemGroup>
+</Project>

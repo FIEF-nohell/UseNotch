@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M00 documentation baseline complete. Application implementation has not started; M01-M14 remain open.
+Status: M01 project foundation complete. M00-M01 are complete; M02-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,19 +62,19 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | Planning and M00 baseline complete; application implementation not started |
-| Active milestone | None; M01 is next |
-| Last completed milestone | M00 |
-| Last validated checkpoint | Completion commit with subject `docs: establish implementation baseline (M00)`; resolve in Git history |
+| Overall state | M01 project foundation complete; tray, overlay, and providers are not implemented |
+| Active milestone | None; M02 is next |
+| Last completed milestone | M01 |
+| Last validated checkpoint | Completion commit `chore: scaffold solution and CI (M01)`; resolve by milestone ID in Git history. M00 is `4d10e83`. |
 | Branch | `main`, established by the user |
 | Worktree | `C:\Users\Noel Hermann\Projects\UseNotch` |
-| Files currently changed | No pending implementation changes; documentation baseline and ignore rules are checkpointed |
-| Last verification | Documentation structure, links, checkbox state, and secret-pattern checks only; no application build or tests exist |
-| Next exact action | Inspect the M00 checkpoint, then start M01 by scaffolding the solution and non-elevated Avalonia app |
-| Blocking condition | None for M01; signed release and real Windows integration checks remain future gates |
-| Known implementation failures | None measured; implementation does not exist yet |
-| Running processes / test environment | None started by this planning task |
-| Provider data accessed | Repository source and public documentation only; no live account integration tests |
+| Files currently changed | No pending M01 changes after its checkpoint commit; no M02 work started |
+| Last verification | Clean-source locked restore, Release build (zero warnings/errors), 10 tests passed, formatting passed, and native standard-user launch/PerMonitorV2/clean exit passed on Windows build 26200 |
+| Next exact action | Read the M01 checkpoint and replace the temporary MainWindow-owned lifetime with the M02 tray/lifetime coordinator; preserve the startup and binding checks |
+| Blocking condition | None for M02. GitHub-hosted CI has not run because this task did not push; M03 native overlay and later provider/signing gates remain unverified |
+| Known implementation failures | None in M01 checks. Provider.Tests intentionally has no tests yet; no provider behavior or overlay behavior is claimed |
+| Running processes / test environment | No UseNotch process left running. Ignored `.tmp/dotnet` contains SDK 8.0.424; `.tmp/m01-clean` contains the clean-source verification build; `TestResults` contains local TRX evidence |
+| Provider data accessed | Repository source, package metadata, and public documentation only; no live credentials or usage endpoints accessed |
 
 ### Checkpoint protocol for a completed milestone
 
@@ -109,6 +109,7 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 |---|---|---|---|---|
 | Planning only | 2026-09-07 | Saved the original design and prepared this build ledger. No implementation checks claimed. | No repository commit created; Git setup belongs to user | M00 |
 | M00 | 2026-09-07, Windows, user-created public repository on `main` | Verified root and initial commit `0dcc55d`; preserved local reference clone while removing its unconfigured gitlink from tracking; added ignore rules; made design references portable; validated document structure, links, checkbox state, whitespace, and credential-pattern scan. No application build/test claim. | `docs: establish implementation baseline (M00)` | Begin M01; no push or release publication performed |
+| M01 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Seven source and five test projects; pinned Avalonia 11.3.20/MVVM 8.4.2; locked restore and clean Release build passed with zero warnings/errors; 10 tests discovered and passed; `dotnet format --verify-no-changes` passed; `scripts/Test-DesktopLaunch.ps1` verified native title binding, non-elevated token, PerMonitorV2, and exit code 0. Public-repository/whitespace checks passed. See M01 evidence below. | `chore: scaffold solution and CI (M01)` | M02 tray/lifecycle. No remote push, hosted CI run, provider access, overlay claim, or release performed |
 
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
@@ -120,6 +121,11 @@ Use milestone IDs as checkpoint references until a short hash can be recorded in
 | 2026-09-07 | Persistent history is post-MVP | Last-good JSON cache satisfies initial recovery needs |
 | 2026-09-07 | Native overlay correctness is an early blocking gate | Prevent provider work from hiding an unreliable desktop foundation |
 | 2026-09-07 | Repository is public; baseline includes portable source links and local-data ignore rules | User established Git; preserve the local clone but do not distribute it as an unconfigured gitlink |
+| 2026-09-07 | Use SDK 8.0.424 and a centrally pinned Avalonia 11.3.20 package set with FluentTheme | Remain within the planned .NET 8/Avalonia 11 stack while updating the inspected 11.2.5 baseline; compatible package restore, build, headless binding, and native startup were verified |
+| 2026-09-07 | Install the validation SDK under ignored `.tmp/dotnet` | System SDK is 9.0.313; use an isolated .NET 8 SDK without changing system installation. Resume with `.\.tmp\dotnet\dotnet.exe` or install the SDK from global.json |
+| 2026-09-07 | M01 layer projects and Provider.Tests remain scaffolds where behavior is scheduled later | No invented domain/provider implementations or placeholder passing tests. System.Text.Json is in the framework; repository implementations remain M05 work |
+| 2026-09-07 | Process DPI awareness is established by the manifest; Avalonia owns scaling | Native startup confirmed PerMonitorV2. M03 must coordinate window placement without a competing process-wide DPI setter |
+| 2026-09-07 | No upstream source files or visual assets copied in M01 | Foundation uses normal framework wiring informed by the references; no upstream source notice is required for a copied file at this stage. Preserve notices when later adapting source |
 
 Add dated entries for dependency upgrades, platform limitations, changed provider contracts, and scope changes. Update both plans if a product or architecture decision changes. Do not silently replace requirements with easier behavior.
 
@@ -128,7 +134,7 @@ Add dated entries for dependency upgrades, platform limitations, changed provide
 Execute in order. Each required milestone depends on its predecessor unless an explicitly independent task is documented. Tests are part of each milestone, not postponed until M13.
 
 - [x] M00: Verify user Git setup and baseline planning checkpoint.
-- [ ] M01: Solution, dependencies, non-elevated manifest, and CI build.
+- [x] M01: Solution, dependencies, non-elevated manifest, and CI build.
 - [ ] M02: Avalonia shell, tray, and application lifecycle.
 - [ ] M03: Native overlay prototype and Windows behavior gate.
 - [ ] M04: Shared domain, mock provider, and complete state fixtures.
@@ -175,15 +181,15 @@ Objective: create a buildable, testable solution with enforced boundaries.
 
 Areas: `UseNotch.sln`, `src/`, `tests/`, `Directory.Build.props`, `Directory.Packages.props`, SDK/tool version files, app manifest, `.github/workflows/ci.yml`.
 
-- [ ] Scaffold the project structure from the design. Domain and Application remain framework-independent; Windows-specific projects use the appropriate Windows target.
-- [ ] Pin one compatible Avalonia 11 package set and one theme stack. Use the inspected modshell-cs versions as evidence, not automatic latest-version selection.
-- [ ] Add CommunityToolkit.Mvvm, System.Text.Json-based repositories as later implementations, logging abstractions, and xUnit projects.
-- [ ] Keep LiveCharts, hardware-monitor packages, and optional history dependencies out until justified.
-- [ ] Enable nullable analysis, compiled XAML bindings, consistent formatting, and appropriate analyzers.
-- [ ] Create an `asInvoker`, `uiAccess=false` manifest and establish DPI initialization ownership.
-- [ ] Add CI restore, Release build, and test discovery. Add test execution as tests arrive; do not claim an empty suite as coverage.
-- [ ] Check source licensing before adapting files. Preserve required notices; do not add AI attribution.
-- [ ] Record the runtime support deadline and dependency compatibility decisions in the evidence log.
+- [x] Scaffold the project structure from the design. Domain and Application remain framework-independent; Windows-specific projects use the appropriate Windows target.
+- [x] Pin one compatible Avalonia 11 package set and one theme stack. Use the inspected modshell-cs versions as evidence, not automatic latest-version selection.
+- [x] Add CommunityToolkit.Mvvm, System.Text.Json-based repositories as later implementations, logging abstractions, and xUnit projects.
+- [x] Keep LiveCharts, hardware-monitor packages, and optional history dependencies out until justified.
+- [x] Enable nullable analysis, compiled XAML bindings, consistent formatting, and appropriate analyzers.
+- [x] Create an `asInvoker`, `uiAccess=false` manifest and establish DPI initialization ownership.
+- [x] Add CI restore, Release build, and test discovery. Add test execution as tests arrive; do not claim an empty suite as coverage.
+- [x] Check source licensing before adapting files. Preserve required notices; do not add AI attribution.
+- [x] Record the runtime support deadline and dependency compatibility decisions in the evidence log.
 
 Acceptance: a clean clone restores and builds on Windows; application starts without UAC; project references follow the design.
 
@@ -192,6 +198,27 @@ Tests: `dotnet restore UseNotch.sln`, `dotnet build UseNotch.sln -c Release --no
 Main risks: copying modshell-cs elevation or hardware collection; mixing incompatible Avalonia packages; creating too many speculative abstractions.
 
 Completion commit: `chore: scaffold solution and CI (M01)`.
+
+#### M01 verification evidence
+
+All CLI checks used `.\.tmp\dotnet\dotnet.exe` (SDK 8.0.424). The equivalent `dotnet` commands are in README.md. Windows reports build 26200; the invoking shell and launched app were non-elevated.
+
+| Check | Command / method | Actual result |
+|---|---|---|
+| Restore | `dotnet restore UseNotch.sln` | All 12 projects restored; lock files generated; no audit warnings |
+| Build | `dotnet build UseNotch.sln -c Release --no-restore` | Passed; zero warnings and zero errors |
+| Discovery | `dotnet test UseNotch.sln -c Release --no-build --no-restore --list-tests` | 10 tests discovered across Domain, Application, UI, and Windows test projects |
+| Tests | `dotnet test UseNotch.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults` | 10 passed, zero failed, zero skipped. Provider.Tests has zero tests and is explicitly not counted as coverage |
+| Formatting | `dotnet format UseNotch.sln --verify-no-changes --no-restore` | Passed without edits |
+| Native startup | `pwsh -NoProfile -File scripts/Test-DesktopLaunch.ps1` | Actual HWND/title loaded; process token non-elevated; native context PerMonitorV2; CloseMainWindow ended process within five seconds, exit 0 |
+| Clean source | Exported staged Git tree with `git archive` into ignored `.tmp/m01-clean`; ran locked restore, Release build, and tests using the isolated SDK | Passed without existing bin/obj output: zero build warnings/errors, same 10 passing tests |
+| Dependency inspection | `dotnet list src/UseNotch.App/UseNotch.App.csproj package --include-transitive` | Expected Avalonia.Desktop rendering/native dependencies, MVVM, and logging abstractions; no chart, hardware-monitor, SQLite, or extra provider package |
+| Repository hygiene | `git diff --cached --check` and staged-text credential/attribution/dash scan | Passed; SDK, captures, TRX, reference clone, and build output remain ignored |
+| Cleanup | Queried remaining `UseNotch.App` processes after smoke check | Zero |
+
+The CI workflow is configured for `windows-2022` with pinned action commits, locked restore, Release build, discovery, tests, formatting, and seven-day TRX retention. It has not been executed remotely in this milestone. No remote push was authorized or performed.
+
+Native focus preservation, click-through, tray lifecycle, multiple monitors, provider credentials, live quotas, performance soak, signing, and packaging were not tested in M01. They remain unchecked in their assigned milestones.
 
 ### M02: Shell and tray lifecycle
 
