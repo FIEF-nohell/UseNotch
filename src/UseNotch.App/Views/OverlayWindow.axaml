@@ -19,16 +19,18 @@
 
     <!--
       The notch. Nothing at all is drawn until the pointer reaches the screen edge, so an idle desktop
-      shows no trace of this window. The bar hugs the edge and is rounded only on the inner side.
+      shows no trace of this window. Its outer corners curve back into the screen edge rather than
+      stopping at a hard step, which is what makes it read as cut into the display.
     -->
-    <Border x:Name="NotchBar"
-            IsVisible="{Binding ShowsProviderCells}"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Center"
-            Width="92"
-            Background="#FF000000"
-            CornerRadius="26,0,0,26"
-            Padding="0,18">
+    <controls:NotchSurface x:Name="NotchBar"
+                           IsVisible="{Binding ShowsProviderCells}"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Width="92"
+                           SurfaceBrush="#FF000000"
+                           InnerRadius="26"
+                           EdgeRadius="34"
+                           Padding="0,16">
       <StackPanel Spacing="16">
         <Button x:Name="OpenAiCell"
                 Classes="providerItem"
@@ -84,7 +86,7 @@
           </StackPanel>
         </Button>
       </StackPanel>
-    </Border>
+    </controls:NotchSurface>
 
     <!-- Detail callout, pointing at the notch. -->
     <Grid x:Name="DetailPanel"

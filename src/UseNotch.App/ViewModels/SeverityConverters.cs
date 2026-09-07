@@ -15,17 +15,21 @@ public static class SeverityConverters
     // Each provider keeps its own accent on its ring, so the two are told apart at a glance. Severity
     // still overrides it once a window is close to or past its limit, which is the thing worth warning
     // about; the detail bars stay severity-coloured throughout.
-    public static IBrush OpenAiAccent { get; } = new SolidColorBrush(Color.Parse("#10A37F"));
+    //
+    // Both accents keep their brand hue but are lifted in saturation and lightness, because the brand
+    // values are chosen for white backgrounds and go muddy on a black surface at a four-pixel stroke.
+    // OpenAI green 10A37F becomes 1FD69F; Claude clay D97757 becomes FF7A4D.
+    public static IBrush OpenAiAccent { get; } = new SolidColorBrush(Color.Parse("#1FD69F"));
 
-    public static IBrush AnthropicAccent { get; } = new SolidColorBrush(Color.Parse("#D97757"));
+    public static IBrush AnthropicAccent { get; } = new SolidColorBrush(Color.Parse("#FF7A4D"));
 
-    public static IBrush NormalBrush { get; } = new SolidColorBrush(Color.Parse("#67D6A3"));
+    public static IBrush NormalBrush { get; } = new SolidColorBrush(Color.Parse("#3BE08C"));
 
-    public static IBrush CautionBrush { get; } = new SolidColorBrush(Color.Parse("#F4C66B"));
+    public static IBrush CautionBrush { get; } = new SolidColorBrush(Color.Parse("#FFD24A"));
 
-    public static IBrush ExhaustedBrush { get; } = new SolidColorBrush(Color.Parse("#FF8585"));
+    public static IBrush ExhaustedBrush { get; } = new SolidColorBrush(Color.Parse("#FF5C4D"));
 
-    public static IBrush UnavailableBrush { get; } = new SolidColorBrush(Color.Parse("#687588"));
+    public static IBrush UnavailableBrush { get; } = new SolidColorBrush(Color.Parse("#6E7A8C"));
 
     public static IValueConverter ToArcBrush { get; } = new SeverityBrushConverter();
 
