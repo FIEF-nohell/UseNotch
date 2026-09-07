@@ -147,7 +147,12 @@ public sealed class PollingCoordinator : IAsyncDisposable
                         ? restored.Status
                         : restored.Status with { Freshness = DataFreshness.Stale }
                 };
-                _store.TryPublish(restored);
+                if (_store.TryPublish(restored))
+                {
+                    // Surface the cached reading immediately so an offline restart shows the last good
+                    // value labelled as cached, instead of an empty cell until the first request fails.
+                    await _dispatcher.DispatchAsync(() => _onPublished?.Invoke(restored), cancellationToken);
+                }
             }
         }
         Start(connection);
@@ -223,13 +228,13 @@ public sealed class PollingCoordinator : IAsyncDisposable
 
         if (worker is not null)
         {
-            await worker.DisposeAsync();
+            await worker.DisposeAsync().ConfigureAwait(false);
         }
 
         _store.Disconnect(provider);
         if (_cache is not null)
         {
-            await _cache.ClearAsync(provider, CancellationToken.None);
+            await _cache.ClearAsync(provider, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -249,7 +254,7 @@ public sealed class PollingCoordinator : IAsyncDisposable
         }
         foreach (var worker in workers)
         {
-            await worker.DisposeAsync();
+            await worker.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -317,7 +322,7 @@ public sealed class PollingCoordinator : IAsyncDisposable
             _stop.Cancel();
             if (_loop is not null)
             {
-                await _loop;
+                await _loop.ConfigureAwait(false);
             }
 
             _signal.Dispose();
@@ -331,7 +336,7 @@ public sealed class PollingCoordinator : IAsyncDisposable
             {
                 while (!_stop.IsCancellationRequested)
                 {
-                    await _signal.WaitAsync(_stop.Token);
+                    await _signal.WaitAsync(_stop.Token).ConfigureAwait(false);
                     lock (_gate)
                     {
                         _requested = false;
@@ -344,10 +349,10 @@ public sealed class PollingCoordinator : IAsyncDisposable
 
                     try
                     {
-                        await ReadOnceAsync();
+                        await ReadOnceAsync().ConfigureAwait(false);
                         _transientFailures = 0;
                         _schemaFailures = 0;
-                        await Task.Delay(Interval, _owner._timeProvider, _stop.Token);
+                        await Task.Delay(Interval, _owner._timeProvider, _stop.Token).ConfigureAwait(false);
                     }
                     catch (ProviderReadException exception)
                     {
@@ -357,13 +362,13 @@ public sealed class PollingCoordinator : IAsyncDisposable
                             : exception.IsTransient
                                 ? BackoffPolicy.NextAttempt(now, ++_transientFailures, exception.ServerDeadline)
                                 : null;
-                        await PublishFailureAsync(exception, now, nextAttempt);
+                        await PublishFailureAsync(exception, now, nextAttempt).ConfigureAwait(false);
                         if (nextAttempt is { } deadline)
                         {
                             var delay = deadline - _owner._timeProvider.GetUtcNow();
                             if (delay > TimeSpan.Zero)
                             {
-                                await Task.Delay(delay, _owner._timeProvider, _stop.Token);
+                                await Task.Delay(delay, _owner._timeProvider, _stop.Token).ConfigureAwait(false);
                             }
                         }
                         if (nextAttempt is null)
@@ -397,7 +402,7 @@ public sealed class PollingCoordinator : IAsyncDisposable
             UsageSnapshot? snapshot;
             try
             {
-                snapshot = await _owner._providers[_connection.Provider].ReadAsync(_connection, attempt.Token);
+                snapshot = await _owner._providers[_connection.Provider].ReadAsync(_connection, attempt.Token).ConfigureAwait(false);
             }
             catch (ProviderReadException)
             {
@@ -431,9 +436,9 @@ public sealed class PollingCoordinator : IAsyncDisposable
             {
                 if (_owner._cache is not null)
                 {
-                    await _owner._cache.SaveAsync(candidate, _stop.Token);
+                    await _owner._cache.SaveAsync(candidate, _stop.Token).ConfigureAwait(false);
                 }
-                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token);
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token).ConfigureAwait(false);
             }
         }
 
@@ -464,9 +469,9 @@ public sealed class PollingCoordinator : IAsyncDisposable
             {
                 if (_owner._cache is not null)
                 {
-                    await _owner._cache.SaveAsync(candidate, _stop.Token);
+                    await _owner._cache.SaveAsync(candidate, _stop.Token).ConfigureAwait(false);
                 }
-                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token);
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token).ConfigureAwait(false);
             }
         }
     }

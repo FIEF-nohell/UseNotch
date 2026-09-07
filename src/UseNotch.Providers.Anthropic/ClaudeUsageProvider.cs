@@ -166,14 +166,33 @@ public static class ClaudeUsageParser
         if (window.ValueKind != JsonValueKind.Object) { return; }
         var rawKind = property ?? (window.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String ? kind.GetString() : null);
         var id = rawKind switch { "five_hour" => "session", "seven_day" => "weekly_all", "session" => "session", "weekly_all" => "weekly_all", _ => rawKind };
+        // A live account returns several "weekly_scoped" entries that differ only by their scope, so the
+        // scope model name has to become part of the identity. Without it they would collide and only the
+        // first scoped window would ever be shown.
+        var scopeName = ReadScopeName(window);
+        if (id == "weekly_scoped" && scopeName is not null) { id = "weekly_scoped:" + Slug(scopeName); }
         var percentProperty = property is null ? "percent" : "utilization";
         if (id is null || !window.TryGetProperty(percentProperty, out var percent) || percent.ValueKind != JsonValueKind.Number || !percent.TryGetDecimal(out var usage) || usage is < 0 or > 100 || result.Any(existing => existing.Id == id)) { return; }
         var reset = ReadTimestamp(window, "resets_at") ?? ReadTimestamp(window, "reset_at");
-        result.Add(new QuotaWindow(id, Label(id), null, null, reset, new UsageLimit(null, null, null, usage / 100m, "percent")));
+        result.Add(new QuotaWindow(id, scopeName ?? Label(id), null, null, reset, new UsageLimit(null, null, null, usage / 100m, "percent")));
     }
 
+    private static string? ReadScopeName(JsonElement window)
+    {
+        if (!window.TryGetProperty("scope", out var scope) || scope.ValueKind != JsonValueKind.Object
+            || !scope.TryGetProperty("model", out var model) || model.ValueKind != JsonValueKind.Object
+            || !model.TryGetProperty("display_name", out var name) || name.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+        var value = name.GetString();
+        return string.IsNullOrWhiteSpace(value) || value.Length > 40 ? null : value.Trim();
+    }
+
+    private static string Slug(string value) => string.Concat(value.Trim().ToLowerInvariant().Select(character => char.IsLetterOrDigit(character) ? character : '_'));
+
     private static DateTimeOffset? ReadTimestamp(JsonElement value, string property) => value.TryGetProperty(property, out var timestamp) && timestamp.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(timestamp.GetString(), out var parsed) ? parsed.ToUniversalTime() : null;
-    private static string Label(string id) => id switch { "session" => "Current session", "weekly_all" => "All models", "weekly_opus" => "Opus", "weekly_sonnet" => "Sonnet", _ => id.Replace("weekly_", "", StringComparison.Ordinal).Replace('_', ' ') };
+    private static string Label(string id) => id switch { "session" => "Current session", "weekly_all" => "All models", "weekly_opus" => "Opus", "weekly_sonnet" => "Sonnet", "weekly_scoped" => "Scoped model", _ => id.Replace("weekly_", "", StringComparison.Ordinal).Replace('_', ' ') };
     private static ProviderReadException Unsupported() => new("Provider response format is unsupported", false, schemaFailure: true, authenticationHint: AuthenticationState.Unsupported);
 }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -10,6 +11,7 @@ using UseNotch.App.Views;
 using UseNotch.Application;
 using UseNotch.Domain;
 using UseNotch.Platform.Windows.Overlay;
+using UseNotch.Providers.Anthropic;
 using UseNotch.Providers.OpenAI;
 
 namespace UseNotch.App;
@@ -23,6 +25,7 @@ public partial class App : Avalonia.Application
     private OverlayController? _overlayController;
     private PollingCoordinator? _pollingCoordinator;
     private readonly OverlayViewModel _overlayViewModel = new();
+    private static readonly TimeSpan ShutdownBudget = TimeSpan.FromSeconds(5);
 
     internal static void RequestActivation()
     {
@@ -91,9 +94,11 @@ public partial class App : Avalonia.Application
                 _overlayController.Show();
             }
 
-            if (HasArgument("--enable-codex"))
+            var enableCodex = HasArgument("--enable-codex");
+            var enableClaude = HasArgument("--enable-claude");
+            if (enableCodex || enableClaude)
             {
-                StartCodexPolling();
+                StartProviderPolling(enableCodex, enableClaude);
                 _overlayController.Show();
             }
 
@@ -127,8 +132,17 @@ public partial class App : Avalonia.Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         SetTrayVisibility(false);
-        _pollingCoordinator?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        _pollingCoordinator = null;
+        if (_pollingCoordinator is { } pollingCoordinator)
+        {
+            _pollingCoordinator = null;
+            // Exit runs on the UI thread. Dispose the workers on the thread pool and give up after a
+            // bounded wait, so a stuck provider read can delay shutdown but can never prevent it.
+            if (!Task.Run(() => pollingCoordinator.DisposeAsync().AsTask()).Wait(ShutdownBudget))
+            {
+                Trace.TraceWarning("Polling shutdown exceeded its budget; exiting anyway.");
+            }
+        }
+
         _overlayController?.Dispose();
         _overlayController = null;
         _lifecycleCoordinator?.Dispose();
@@ -140,18 +154,39 @@ public partial class App : Avalonia.Application
         Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
 
-    private void StartCodexPolling()
+    private void StartProviderPolling(bool enableCodex, bool enableClaude)
     {
         var cacheRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "UseNotch",
             "cache");
+        var providers = new List<IUsageProvider>();
+        if (enableCodex)
+        {
+            providers.Add(new CodexUsageProvider());
+        }
+
+        if (enableClaude)
+        {
+            providers.Add(new ClaudeUsageProvider());
+        }
+
         _pollingCoordinator = new PollingCoordinator(
-            [new CodexUsageProvider()],
+            providers,
             new InMemoryUsageStateStore(),
             cache: new JsonUsageCache(cacheRoot),
             onPublished: state => Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(state)));
-        _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "codex:default", true, 1));
+
+        // Each provider gets its own independent worker, so a failing Claude read cannot stop Codex.
+        if (enableCodex)
+        {
+            _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "codex:default", true, 1));
+        }
+
+        if (enableClaude)
+        {
+            _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.Anthropic, "claude:default", true, 1));
+        }
     }
 
     private void SetTrayVisibility(bool isVisible)

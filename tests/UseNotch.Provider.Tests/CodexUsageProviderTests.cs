@@ -94,6 +94,32 @@ public sealed class CodexUsageProviderTests : IDisposable
         Assert.Equal(expected, exception.Category);
     }
 
+    [Theory]
+    // A signed-in ChatGPT installation observed on 2026-09-07 writes a null "OPENAI_API_KEY" next to its
+    // ChatGPT tokens, and an "auth_mode" naming the mode the owning tool actually uses.
+    [InlineData("{\"OPENAI_API_KEY\":null,\"auth_mode\":\"chatgpt\",\"last_refresh\":\"2026-09-07T08:14:00Z\",\"tokens\":{\"access_token\":\"synthetic.token\",\"account_id\":\"synthetic-account\",\"id_token\":\"synthetic\",\"refresh_token\":\"synthetic\"}}", true)]
+    [InlineData("{\"OPENAI_API_KEY\":\"synthetic\",\"auth_mode\":\"apikey\",\"tokens\":{\"access_token\":\"synthetic.token\",\"account_id\":\"synthetic-account\"}}", false)]
+    [InlineData("{\"OPENAI_API_KEY\":\"synthetic\",\"tokens\":null}", false)]
+    public async Task Credential_reader_treats_only_a_real_api_key_mode_as_unsupported(string auth, bool expectChatGptCredential)
+    {
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(Path.Combine(_root, "auth.json"), auth, CancellationToken.None);
+        var source = new CodexSource(_root, "test", CodexCredentialStorage.File);
+
+        if (expectChatGptCredential)
+        {
+            var credential = await new CodexCredentialReader().ReadAsync(source, CancellationToken.None);
+            Assert.Equal("synthetic-account", credential.AccountId);
+            Assert.NotEqual("synthetic.token", credential.Fingerprint);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<ProviderReadException>(() => new CodexCredentialReader().ReadAsync(source, CancellationToken.None));
+            Assert.Equal(ErrorCategory.Schema, exception.Category);
+            Assert.Equal("API-key authentication does not expose ChatGPT Codex quota", exception.Message);
+        }
+    }
+
     [Fact]
     public async Task Keyring_mode_uses_the_documented_per_root_target_without_vault_enumeration()
     {
@@ -133,6 +159,29 @@ public sealed class CodexUsageProviderTests : IDisposable
         Assert.Collection(windows,
             primary => { Assert.Equal("primary", primary.Id); Assert.Equal("5h limit", primary.Scope); Assert.Equal(.4m, primary.Limit.UsedFraction); },
             secondary => { Assert.Equal("secondary", secondary.Id); Assert.Equal("Monthly limit", secondary.Scope); Assert.Equal(.2m, secondary.Limit.UsedFraction); });
+    }
+
+    [Fact]
+    public void Usage_parser_reads_the_observed_live_response_layout()
+    {
+        // Structure mirrors a live chatgpt.com/backend-api/wham/usage response observed on 2026-09-07.
+        // Values are synthetic and no account identifiers are stored in this repository.
+        using var document = JsonDocument.Parse("""
+            {"user_id":"synthetic","account_id":"synthetic","email":"synthetic","plan_type":"plus",
+             "rate_limit":{"allowed":true,"limit_reached":false,
+               "primary_window":{"used_percent":53,"limit_window_seconds":18000,"reset_after_seconds":3883,"reset_at":1900003600},
+               "secondary_window":{"used_percent":8,"limit_window_seconds":604800,"reset_after_seconds":590683,"reset_at":1900590000}},
+             "code_review_rate_limit":null,"additional_rate_limits":null,
+             "model_usage":{"gpt-6-astra":{"available":true,"available_at":null}},
+             "credits":{"has_credits":false,"balance":"0","approx_local_messages":[0,0]},
+             "spend_control":{"reached":false},"rate_limit_reset_credits":{"available_count":1}}
+            """);
+
+        var windows = CodexUsageParser.Parse(document.RootElement, DateTimeOffset.FromUnixTimeSeconds(1900000000));
+
+        Assert.Collection(windows,
+            primary => { Assert.Equal("primary", primary.Id); Assert.Equal("5h limit", primary.Scope); Assert.Equal(.53m, primary.Limit.UsedFraction); Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1900003600), primary.ResetsAt); },
+            secondary => { Assert.Equal("secondary", secondary.Id); Assert.Equal("Weekly limit", secondary.Scope); Assert.Equal(.08m, secondary.Limit.UsedFraction); });
     }
 
     [Fact]
@@ -316,6 +365,46 @@ public sealed class ClaudeUsageParserTests
         Assert.Equal("session", window.Id);
         Assert.Null(window.ResetsAt);
         Assert.Equal(.1m, window.Limit.UsedFraction);
+    }
+
+    [Fact]
+    public void Parser_reads_the_observed_live_response_layout()
+    {
+        // Structure mirrors a Claude Code 2.1.263 /api/oauth/usage response observed on 2026-09-07.
+        // Values are synthetic; no account data is stored in this repository.
+        using var document = JsonDocument.Parse("""
+            {"five_hour":{"utilization":20.0,"resets_at":"2027-01-15T12:00:00.000000+00:00","limit_dollars":null,"used_dollars":null,"locked_reason":null},
+             "seven_day":{"utilization":16.0,"resets_at":"2027-01-20T12:00:00.000000+00:00","limit_dollars":null},
+             "seven_day_opus":null,"nimbus_quill":{"utilization":0.0,"resets_at":null},
+             "extra_usage":{"is_enabled":false,"utilization":null},
+             "limits":[{"kind":"session","group":"session","percent":20,"severity":"normal","resets_at":"2027-01-15T12:00:00.000000+00:00","scope":null,"is_active":true},
+                       {"kind":"weekly_all","group":"weekly","percent":17,"severity":"normal","resets_at":"2027-01-20T12:00:00.000000+00:00","scope":null,"is_active":false},
+                       {"kind":"weekly_scoped","group":"weekly","percent":7,"severity":"normal","resets_at":"2027-01-20T12:00:00.000000+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}],
+             "spend":{"percent":0,"enabled":false},"member_dashboard_available":false}
+            """);
+
+        var windows = ClaudeUsageParser.Parse(document.RootElement, DateTimeOffset.UtcNow);
+
+        Assert.Collection(windows,
+            session => { Assert.Equal("session", session.Id); Assert.Equal(.2m, session.Limit.UsedFraction); Assert.NotNull(session.ResetsAt); },
+            weeklyAll => { Assert.Equal("weekly_all", weeklyAll.Id); Assert.Equal(.17m, weeklyAll.Limit.UsedFraction); },
+            scoped => { Assert.Equal("weekly_scoped:fable", scoped.Id); Assert.Equal("Fable", scoped.Scope); Assert.Equal(.07m, scoped.Limit.UsedFraction); });
+    }
+
+    [Fact]
+    public void Parser_keeps_scoped_windows_distinct_instead_of_collapsing_them()
+    {
+        using var document = JsonDocument.Parse("""
+            {"limits":[{"kind":"weekly_scoped","percent":7,"scope":{"model":{"display_name":"Fable"}}},
+                       {"kind":"weekly_scoped","percent":41,"scope":{"model":{"display_name":"Opus"}}},
+                       {"kind":"weekly_scoped","percent":3,"scope":null}]}
+            """);
+
+        var windows = ClaudeUsageParser.Parse(document.RootElement, DateTimeOffset.UtcNow);
+
+        Assert.Equal(3, windows.Count);
+        Assert.Equal(["weekly_scoped", "weekly_scoped:fable", "weekly_scoped:opus"], windows.Select(window => window.Id));
+        Assert.Equal("Scoped model", windows.Single(window => window.Id == "weekly_scoped").Scope);
     }
 
     [Fact]

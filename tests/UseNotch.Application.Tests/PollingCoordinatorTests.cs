@@ -214,9 +214,16 @@ public class PollingCoordinatorTests
     [Fact]
     public async Task Account_change_starts_a_new_epoch_and_replaces_the_old_reading()
     {
+        // The second account must not be published before the test has observed the first one, otherwise
+        // the assertion races the polling interval instead of testing the epoch bump.
+        var secondAccountAllowed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var provider = new SequencedProvider(
             _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-a")),
-            _ => Task.FromResult<UsageSnapshot?>(Snapshot("account-b")));
+            async _ =>
+            {
+                await secondAccountAllowed.Task;
+                return (UsageSnapshot?)Snapshot("account-b");
+            });
         var store = new InMemoryUsageStateStore();
         await using var coordinator = new PollingCoordinator(
             [provider],
@@ -227,6 +234,7 @@ public class PollingCoordinatorTests
         var first = await WaitForStateAsync(store, ProviderId.OpenAi);
         Assert.Equal("account-a", first.Snapshot!.Account.Partition);
         Assert.Equal(0, first.AccountGeneration);
+        secondAccountAllowed.SetResult(true);
 
         ProviderRuntimeState second = first;
         for (var attempt = 0; attempt < 200 && second.Snapshot!.Account.Partition == "account-a"; attempt++)
@@ -244,6 +252,49 @@ public class PollingCoordinatorTests
         var now = DateTimeOffset.UtcNow;
         var window = new QuotaWindow("session", "session", TimeSpan.FromHours(5), now, now.AddHours(4), new UsageLimit(1, 4, 5, .2m, "requests"));
         return new UsageSnapshot(ProviderId.OpenAi, new AccountScope(accountPartition, IdentityConfidence.LocalPartition), now, [window], "session", new SourceDescriptor("test", "epoch", true), null);
+    }
+
+    [Fact]
+    public async Task Cached_startup_state_reaches_the_ui_before_the_first_request_completes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "usenotch-cache-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var window = new QuotaWindow("session", "session", TimeSpan.FromHours(5), now.AddMinutes(-10), now.AddHours(4), new UsageLimit(1, 4, 5, .2m, "requests"));
+            var snapshot = new UsageSnapshot(ProviderId.OpenAi, new AccountScope("account", IdentityConfidence.LocalPartition), now.AddMinutes(-10), [window], "session", new SourceDescriptor("test", "cache", true), null);
+            var cached = new ProviderRuntimeState(
+                new ProviderConnection(ProviderId.OpenAi, "mock", true, 1),
+                snapshot,
+                new ProviderStatus(AuthenticationState.Authenticated, DataFreshness.Fresh, now.AddMinutes(-10), now.AddMinutes(-10), null, false, null),
+                1,
+                1);
+            var cache = new JsonUsageCache(root);
+            await cache.SaveAsync(cached, CancellationToken.None);
+            var provider = new BlockingProvider();
+            var published = new List<ProviderRuntimeState>();
+            await using var coordinator = new PollingCoordinator(
+                [provider],
+                new InMemoryUsageStateStore(),
+                cache: cache,
+                onPublished: published.Add);
+
+            await coordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "mock", true, 2));
+            await provider.Entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            var restored = Assert.Single(published);
+            Assert.Equal(StateOrigin.CachedStartup, restored.Origin);
+            Assert.Equal(DataFreshness.Stale, restored.Status.Freshness);
+            Assert.Equal("session", restored.Snapshot!.Headline!.Id);
+            provider.Release.TrySetResult(true);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
     }
 
     [Fact]
@@ -295,6 +346,56 @@ public class PollingCoordinatorTests
             await Task.Delay(10);
         }
         throw new TimeoutException("The provider state was not published.");
+    }
+
+    [Fact]
+    public void Shutdown_completes_when_the_disposing_thread_owns_a_blocked_synchronization_context()
+    {
+        // The desktop app disposes the coordinator from its UI thread during exit. If any worker await
+        // resumed on that captured context, the blocked thread could never run the continuation and the
+        // process would hang instead of exiting.
+        var context = new NonPumpingSynchronizationContext();
+        var provider = new BlockingProvider();
+        var completed = false;
+        var failure = (Exception?)null;
+        var thread = new Thread(() =>
+        {
+            var previous = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(context);
+            try
+            {
+                var coordinator = new PollingCoordinator([provider], new InMemoryUsageStateStore());
+                _ = coordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "mock", true, 1));
+                provider.Entered.Task.Wait(TimeSpan.FromSeconds(5));
+                completed = coordinator.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previous);
+            }
+        });
+        thread.IsBackground = true;
+        thread.Start();
+
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "The disposing thread never returned.");
+        Assert.Null(failure);
+        Assert.True(completed, "Shutdown did not finish while the disposing thread was blocked.");
+        Assert.Equal(0, context.PostCount);
+    }
+
+    private sealed class NonPumpingSynchronizationContext : SynchronizationContext
+    {
+        private int _postCount;
+
+        public int PostCount => Volatile.Read(ref _postCount);
+
+        public override void Post(SendOrPostCallback callback, object? state) => Interlocked.Increment(ref _postCount);
+
+        public override void Send(SendOrPostCallback callback, object? state) => Interlocked.Increment(ref _postCount);
     }
 
     private sealed class BlockingProvider : IUsageProvider

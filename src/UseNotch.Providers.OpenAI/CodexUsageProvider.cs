@@ -225,26 +225,38 @@ public sealed class CodexCredentialReader
         {
             using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
-            if (root.TryGetProperty("OPENAI_API_KEY", out _) || root.TryGetProperty("api_key", out _))
+            // A signed-in ChatGPT installation still writes an "OPENAI_API_KEY" property holding null, so
+            // only a non-empty value counts as API-key authentication. Codex's own "auth_mode" wins when it
+            // is present, because that is what the owning tool uses to pick between the two.
+            var apiKey = ReadText(root, "OPENAI_API_KEY") ?? ReadText(root, "api_key");
+            var authMode = ReadText(root, "auth_mode");
+            var hasChatGptTokens = root.TryGetProperty("tokens", out var tokens)
+                && tokens.ValueKind == JsonValueKind.Object
+                && ReadText(tokens, "access_token") is not null
+                && ReadText(tokens, "account_id") is not null;
+            if (string.Equals(authMode, "apikey", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(authMode, "api_key", StringComparison.OrdinalIgnoreCase)
+                || (!hasChatGptTokens && apiKey is not null))
             {
                 throw Unsupported("API-key authentication does not expose ChatGPT Codex quota");
             }
-            if (!root.TryGetProperty("tokens", out var tokens)
-                || !tokens.TryGetProperty("access_token", out var accessToken)
-                || !tokens.TryGetProperty("account_id", out var accountId)
-                || string.IsNullOrWhiteSpace(accessToken.GetString())
-                || string.IsNullOrWhiteSpace(accountId.GetString()))
+            if (!hasChatGptTokens)
             {
                 throw Unsupported("Codex credential format is unsupported");
             }
-            var token = accessToken.GetString()!;
-            return new CodexCredential(token, accountId.GetString()!, Fingerprint(token), JwtExpiryHint(token));
+            var token = ReadText(tokens, "access_token")!;
+            return new CodexCredential(token, ReadText(tokens, "account_id")!, Fingerprint(token), JwtExpiryHint(token));
         }
         catch (JsonException)
         {
             throw Unsupported("Codex credential format is unsupported");
         }
     }
+
+    private static string? ReadText(JsonElement parent, string property)
+        => parent.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()
+            : null;
 
     internal static string Fingerprint(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..16].ToLowerInvariant();
 

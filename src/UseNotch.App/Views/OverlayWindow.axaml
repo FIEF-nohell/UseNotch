@@ -25,7 +25,7 @@
       <Button x:Name="AnthropicCell" Classes="overlayCell" Click="OnAnthropicClicked">
         <StackPanel Spacing="1">
           <TextBlock Text="ANTHROPIC" Classes="providerLabel" />
-          <TextBlock Text="{Binding AnthropicStatusText}" Classes="providerValue" />
+          <TextBlock Text="{Binding AnthropicHeadline}" Classes="providerValue" />
         </StackPanel>
       </Button>
     </StackPanel>
