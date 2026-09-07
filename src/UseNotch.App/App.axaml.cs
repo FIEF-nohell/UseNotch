@@ -11,6 +11,7 @@ using UseNotch.App.Views;
 using UseNotch.Application;
 using UseNotch.Domain;
 using UseNotch.Platform.Windows.Overlay;
+using UseNotch.Platform.Windows.Session;
 using UseNotch.Providers.Anthropic;
 using UseNotch.Providers.OpenAI;
 
@@ -24,6 +25,8 @@ public partial class App : Avalonia.Application
     private AppLifecycleCoordinator? _lifecycleCoordinator;
     private OverlayController? _overlayController;
     private PollingCoordinator? _pollingCoordinator;
+    private ActivityCoordinator? _activityCoordinator;
+    private SessionLockWatcher? _sessionLockWatcher;
     private readonly OverlayViewModel _overlayViewModel = new();
     private static readonly TimeSpan ShutdownBudget = TimeSpan.FromSeconds(5);
 
@@ -132,6 +135,17 @@ public partial class App : Avalonia.Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         SetTrayVisibility(false);
+        _sessionLockWatcher?.Dispose();
+        _sessionLockWatcher = null;
+        if (_activityCoordinator is { } activityCoordinator)
+        {
+            _activityCoordinator = null;
+            if (!Task.Run(() => activityCoordinator.DisposeAsync().AsTask()).Wait(ShutdownBudget))
+            {
+                Trace.TraceWarning("Activity shutdown exceeded its budget; exiting anyway.");
+            }
+        }
+
         if (_pollingCoordinator is { } pollingCoordinator)
         {
             _pollingCoordinator = null;
@@ -161,31 +175,57 @@ public partial class App : Avalonia.Application
             "UseNotch",
             "cache");
         var providers = new List<IUsageProvider>();
+        var monitors = new List<IActivityMonitor>();
         if (enableCodex)
         {
             providers.Add(new CodexUsageProvider());
+            monitors.Add(new CodexActivityMonitor());
         }
 
         if (enableClaude)
         {
             providers.Add(new ClaudeUsageProvider());
+            monitors.Add(new ClaudeActivityMonitor());
         }
 
+        var store = new InMemoryUsageStateStore();
         _pollingCoordinator = new PollingCoordinator(
             providers,
-            new InMemoryUsageStateStore(),
+            store,
             cache: new JsonUsageCache(cacheRoot),
             onPublished: state => Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(state)));
+
+        // Activity runs in its own coordinator with its own workers, so an unsupported or failing activity
+        // source can never delay or break a quota reading.
+        _activityCoordinator = new ActivityCoordinator(
+            monitors,
+            store,
+            onPublished: provider =>
+            {
+                if (store.Get(provider) is { } current)
+                {
+                    Dispatcher.UIThread.Post(() => _overlayViewModel.ApplyRuntimeState(current));
+                }
+            });
+
+        // Nobody can read the overlay while the session is locked, so stop scanning until it returns.
+        _sessionLockWatcher = new SessionLockWatcher(locked =>
+        {
+            _activityCoordinator?.SetPaused(locked);
+            _pollingCoordinator?.SetPaused(locked);
+        });
 
         // Each provider gets its own independent worker, so a failing Claude read cannot stop Codex.
         if (enableCodex)
         {
             _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.OpenAi, "codex:default", true, 1));
+            _activityCoordinator.Start(ProviderId.OpenAi);
         }
 
         if (enableClaude)
         {
             _ = _pollingCoordinator.StartAsync(new ProviderConnection(ProviderId.Anthropic, "claude:default", true, 1));
+            _activityCoordinator.Start(ProviderId.Anthropic);
         }
     }
 

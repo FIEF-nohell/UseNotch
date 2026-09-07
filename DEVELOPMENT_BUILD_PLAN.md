@@ -1,6 +1,6 @@
 # UseNotch developer and agent build plan
 
-Status: M00-M07 are complete. M08-M14 remain open.
+Status: M00-M08 are complete. M09-M14 remain open.
 
 Prepared: 2026-09-07.
 
@@ -62,15 +62,15 @@ Update this block before stopping or handing off. Replace stale values instead o
 
 | Field | Current value |
 |---|---|
-| Overall state | M00-M07 are complete and verified, including the full live vertical slice against both real provider accounts. Three product defects found by that slice are fixed: unmapped transport failures, a worker that died on an unmapped exception, and a lost cached-startup origin label |
-| Active milestone | M08, conservative local activity monitoring |
-| Last completed milestone | M07, with M06 completed immediately before it in the same session |
+| Overall state | M00-M08 are complete. Quota is live-verified against both real provider accounts, and activity monitoring is implemented against the real Claude Code session records and the real Codex state database |
+| Active milestone | M09, settings, privacy, source selection, and startup |
+| Last completed milestone | M08, conservative local activity monitoring |
 | Last validated checkpoint | Provider integration checkpoint `637d397` (`chore: checkpoint M07 provider integration`); Codex alternate-schema fix `655ad2f`; overlay regression fix `1203d52`; M06 synthetic checkpoint `929716a`; M05 `5586660`; M00 `4d10e83`; M01 `254447a`; M02 `c15d86a`; M04 `9fd1928`. |
 | Branch | `main`, established by the user |
 | Worktree | The Windows worktree `C:\Users\Noel Hermann\Projects\UseNotch`. The previous session's Linux-side changes were rebuilt and re-tested here and hold |
-| Files currently changed | Committed in the M06 completion commit. No provider credentials or raw account data are present in the repository |
-| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 11/11, Provider 49/49, UI 9/9, Application 55/55, 129 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `pwsh -NoProfile -File scripts/Test-LiveProviderSlice.ps1` passed both phases end to end |
-| Next exact action | Begin M08, conservative local activity monitoring, following its task list in section 4 |
+| Files currently changed | Committed in the M08 completion commit. No provider credentials or raw account data are present in the repository |
+| Last verification | Isolated SDK 8.0.424 (`.tmp\dotnet`). Locked restore, `dotnet build UseNotch.sln -c Release` with zero warnings and zero errors, and the full solution test run: Domain 5/5, Windows 11/11, Provider 75/75, UI 9/9, Application 66/66, 166 total. `dotnet format --verify-no-changes` and `git diff --check` passed. `scripts/Test-LiveProviderSlice.ps1` still passes both phases with the activity workers running |
+| Next exact action | Begin M09, following its task list in section 4 |
 | Blocking condition | None |
 | Known implementation failures | None outstanding. The overlay harness can still lose its foreground-set request when the user changes foreground during an automated run, which is a Windows focus-policy limitation of the harness rather than an overlay result |
 | Running processes / test environment | No UseNotch process is left running. The isolated SDK under `.tmp\dotnet` and `dotnet-dump` under `.tmp\tools` are ignored local artifacts, as is the `.tmp\hang.dmp` capture used to diagnose the earlier shutdown deadlock |
@@ -127,6 +127,8 @@ Append one entry at each milestone completion or meaningful partial handoff. Kee
 
 | M06 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Closed the live vertical slice with `scripts/Test-LiveProviderSlice.ps1`, which passed every leg: local source discovery, live request, snapshot, overlay window, detail pane from both cells, sanitized cache files, offline restart served from that cache, and bounded shutdown. Running it exposed three real defects, all fixed here. A plain transport failure threw `HttpRequestException`, which neither adapter mapped, so the polling worker died silently and no failure was ever published; both adapters now turn connection, DNS, TLS, and proxy failures into transient network errors. The worker loop now also catches any unmapped exception, publishes a safe transient failure and backs off, so one adapter defect can no longer stop a provider permanently. A failed attempt used to relabel a restored reading as live; the cached-startup origin is now preserved until a successful read replaces it. The offline leg is simulated with an unreachable proxy in the launched process's environment, which needs no elevation and changes no machine or user network setting. Locked restore, zero-warning Release build, 129 solution tests (Domain 5, Windows 11, Provider 49, UI 9, Application 55), `dotnet format --verify-no-changes`, and `git diff --check` passed. Live agreement check: the snapshot percentages matched the values the provider endpoints reported for the same windows in the same run. | `feat: integrate Codex usage (M06)` | Begin M08. No unresolved M06 compatibility issue remains |
 
+| M08 | 2026-09-07, Windows 11 x64 build 26200, non-elevated shell, isolated SDK 8.0.424 | Added activity monitoring as its own layer with its own workers. Inspected the real sources first: Claude Code 2.1.263 writes per-session records under `<ClaudeRoot>\sessions` carrying `pid`, `sessionId`, `procStart` as a Windows FILETIME string, `status`, and millisecond timestamps, while `<CodexRoot>\state_5.sqlite` holds a WAL-mode `threads` table whose `updated_at` is Unix seconds. The Claude monitor maps only recognized statuses, verifies each process by id and creation time, drops ended sessions, downgrades access-denied inspection to an estimate, and never carries a working directory, session name, socket path, or raw session id past the parser. The Codex monitor probes the schema before querying, opens the database read-only with a private cache and a 250 ms busy timeout, caps the query at eight rows, follows a record-supplied rollout path only when it resolves inside the Codex root and then reads only its metadata, and reports estimated recent activity or nothing at all, never idle or waiting. A `FileSystemWatcher` with a 150 ms debounce makes supported changes prompt, a watcher error requests a full pass, and a session lock pauses both coordinators. Added `Microsoft.Data.Sqlite` 10.0.11 and `Microsoft.Win32.SystemEvents` 8.0.0 with updated lock files; the audit-blocked SQLitePCLRaw versions are avoided by the 10.0.11 line. Locked restore, zero-warning Release build, 166 solution tests (Domain 5, Windows 11, Provider 75, UI 9, Application 66), `dotnet format --verify-no-changes`, and `git diff --check` passed. Ran both monitors against the live machine: Claude reported one working session as provider-reported, confirming the FILETIME comparison matches a real process, and Codex reported a supported source with no recent activity while it was not running. The live quota slice still passes with the activity workers running, and the quota cache contains no activity. | `feat: add conservative activity monitoring (M08)` | Begin M09. A Codex working state was observed only through synthetic fixtures, since Codex was not running during this session; the Claude path was confirmed live |
+
 Use milestone IDs as checkpoint references until a short hash can be recorded in a later update. For manual tests, include Windows build, app build, DPI/monitor layout, and result. Store only sanitized evidence; no screenshots with account data or conversation content.
 
 ### Decisions and deviations log
@@ -158,7 +160,7 @@ Execute in order. Each required milestone depends on its predecessor unless an e
 - [x] M05: Polling, concurrency, state store, and JSON cache.
 - [x] M06: OpenAI / Codex usage integration.
 - [x] M07: Anthropic / Claude Code usage integration.
-- [ ] M08: Conservative local activity monitoring.
+- [x] M08: Conservative local activity monitoring.
 - [ ] M09: Settings, privacy, source selection, and startup.
 - [ ] M10: Overlay polish, detailed status, and accessibility.
 - [ ] M11: MVP cache verification and explicit history deferral.
@@ -390,16 +392,16 @@ Objective: add useful activity without overclaiming accuracy or reading conversa
 
 Areas: provider activity readers, FileSystemWatcher service, process inspector, read-only SQLite support, activity aggregation.
 
-- [ ] Keep activity workers independent from quota workers and able to report unsupported capability.
-- [ ] Probe Claude session-record support; use approximately 150 ms debounce and five-second process reconciliation.
-- [ ] Validate PID plus creation time where available; map access denial and unknown status to uncertainty.
-- [ ] Probe only approved Codex paths and known schemas before database queries.
-- [ ] Read external SQLite databases read-only with short waits, bounded results, and live WAL awareness. Do not apply a generic immutable fallback.
-- [ ] Constrain record-supplied paths to approved local roots. Do not read rollout content merely to infer activity.
-- [ ] Use two-second active metadata scans and an eight-second expiry as the initial Codex heuristic; label it estimated.
-- [ ] Never infer waiting from silence or reliable idle from an unsupported source.
-- [ ] Handle missing directories, watcher overflow, process exit, owner shutdown, and schema changes without breaking quota.
-- [ ] Stop activity workers on pause/disconnect and suspend unnecessary work while locked.
+- [x] Keep activity workers independent from quota workers and able to report unsupported capability. `ActivityCoordinator` owns its own worker per provider, separate from `PollingCoordinator`, and every reading carries an explicit `ActivityCapability`.
+- [x] Probe Claude session-record support; use approximately 150 ms debounce and five-second process reconciliation. `<ClaudeRoot>\sessions` is probed for records this adapter recognizes, a `FileSystemWatcher` signals changes through a 150 ms debounce, and the reconciliation cadence is five seconds when nothing is happening.
+- [x] Validate PID plus creation time where available; map access denial and unknown status to uncertainty. The record's `procStart` FILETIME is compared with the live process creation time; a missing or unreadable creation time is uncertainty rather than a match, access-denied inspection downgrades the reading to an estimate, and an unrecognized status maps to unknown.
+- [x] Probe only approved Codex paths and known schemas before database queries. Only `<CodexRoot>\state_5.sqlite` is opened, and only after `threads` is confirmed to expose `id`, `rollout_path`, and `updated_at`.
+- [x] Read external SQLite databases read-only with short waits, bounded results, and live WAL awareness. Do not apply a generic immutable fallback. The connection is `Mode=ReadOnly` with a private cache and a 250 ms busy timeout, the query is capped at eight rows, and no immutable flag is used, which a test confirms by observing a write made through the owning connection in WAL mode.
+- [x] Constrain record-supplied paths to approved local roots. Do not read rollout content merely to infer activity. A rollout path is followed only when it resolves inside the Codex root, and only its last-write metadata is read.
+- [x] Use two-second active metadata scans and an eight-second expiry as the initial Codex heuristic; label it estimated. Codex activity is `ReadingFidelity.Derived` and the overlay renders it with an explicit estimated label.
+- [x] Never infer waiting from silence or reliable idle from an unsupported source. Codex only ever reports working or no session, an unsupported source reports unavailable rather than idle, and the aggregator lets waiting win only when a source actually reported it.
+- [x] Handle missing directories, watcher overflow, process exit, owner shutdown, and schema changes without breaking quota. Each of these produces an honest unavailable or empty activity reading; a watcher error requests a full pass; and a monitor that throws is reported as unavailable activity with no message of its own, leaving the quota state untouched.
+- [x] Stop activity workers on pause/disconnect and suspend unnecessary work while locked. Pausing stops observation, disconnecting stops the worker and clears the reading, and a session lock pauses both the activity and quota coordinators until the session returns.
 
 Acceptance: recognized Claude working/waiting states update promptly; estimates expire; unsupported formats remain useful unavailable states; monitoring is bounded and read-only.
 

@@ -121,8 +121,15 @@
       "usenotch.platform.windows": {
         "type": "Project",
         "dependencies": {
+          "Microsoft.Win32.SystemEvents": "[8.0.0, )",
           "UseNotch.Application": "[0.1.0, )"
         }
+      },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "CentralTransitive",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "9opKRyOKMCi2xJ7Bj7kxtZ1r9vbzosMvRrdEhVhDz8j8MoBGgB+WmC94yH839NPH+BclAjtQ/pyagvi/8gDLkw=="
       }
     }
   }

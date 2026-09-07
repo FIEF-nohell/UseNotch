@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../UseNotch.Application/UseNotch.Application.csproj" />
+    <PackageReference Include="Microsoft.Win32.SystemEvents" />
   </ItemGroup>
 </Project>

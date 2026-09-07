@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../UseNotch.Application/UseNotch.Application.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Tomlyn" />
   </ItemGroup>
 </Project>

@@ -13,6 +13,13 @@ public sealed record ProviderRuntimeState(
     long AccountGeneration)
 {
     public StateOrigin Origin { get; init; } = StateOrigin.Live;
+
+    /// <summary>
+    /// Live activity for this provider. It is owned by the activity workers, is never restored from the
+    /// quota cache, and stays null when a provider reports no activity capability yet.
+    /// </summary>
+    public ActivityReading? Activity { get; init; }
+
     public ProviderRuntimeState ForConnection(ProviderConnection connection) => this with { Connection = connection };
 }
 
@@ -20,6 +27,7 @@ public interface IUsageStateStore
 {
     ProviderRuntimeState? Get(ProviderId provider);
     bool TryPublish(ProviderRuntimeState candidate);
+    bool TryPublishActivity(ProviderId provider, ActivityReading? activity);
     void Disconnect(ProviderId provider);
     void Clear();
 }
@@ -28,12 +36,15 @@ public sealed class InMemoryUsageStateStore : IUsageStateStore
 {
     private readonly object _gate = new();
     private readonly Dictionary<ProviderId, ProviderRuntimeState> _states = [];
+    private readonly Dictionary<ProviderId, ActivityReading> _activity = [];
 
     public ProviderRuntimeState? Get(ProviderId provider)
     {
         lock (_gate)
         {
-            return _states.GetValueOrDefault(provider);
+            return _states.TryGetValue(provider, out var state)
+                ? state with { Activity = _activity.GetValueOrDefault(provider) }
+                : null;
         }
     }
 
@@ -49,8 +60,27 @@ public sealed class InMemoryUsageStateStore : IUsageStateStore
                 return false;
             }
 
-            _states[candidate.Connection.Provider] = candidate;
+            // Activity is stored beside the quota state, so a quota publish can never drop a live activity
+            // reading and an activity publish can never resurrect a superseded quota reading.
+            _states[candidate.Connection.Provider] = candidate with { Activity = null };
             return true;
+        }
+    }
+
+    public bool TryPublishActivity(ProviderId provider, ActivityReading? activity)
+    {
+        lock (_gate)
+        {
+            if (activity is null)
+            {
+                _activity.Remove(provider);
+            }
+            else
+            {
+                _activity[provider] = activity;
+            }
+
+            return _states.ContainsKey(provider);
         }
     }
 
@@ -59,6 +89,7 @@ public sealed class InMemoryUsageStateStore : IUsageStateStore
         lock (_gate)
         {
             _states.Remove(provider);
+            _activity.Remove(provider);
         }
     }
 
@@ -67,6 +98,7 @@ public sealed class InMemoryUsageStateStore : IUsageStateStore
         lock (_gate)
         {
             _states.Clear();
+            _activity.Clear();
         }
     }
 }
@@ -451,7 +483,8 @@ public sealed class PollingCoordinator : IAsyncDisposable
                 {
                     await _owner._cache.SaveAsync(candidate, _stop.Token).ConfigureAwait(false);
                 }
-                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token).ConfigureAwait(false);
+                var published = _owner._store.Get(_connection.Provider) ?? candidate;
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(published), _stop.Token).ConfigureAwait(false);
             }
         }
 
@@ -489,7 +522,8 @@ public sealed class PollingCoordinator : IAsyncDisposable
                 {
                     await _owner._cache.SaveAsync(candidate, _stop.Token).ConfigureAwait(false);
                 }
-                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(candidate), _stop.Token).ConfigureAwait(false);
+                var published = _owner._store.Get(_connection.Provider) ?? candidate;
+                await _owner._dispatcher.DispatchAsync(() => _owner._onPublished?.Invoke(published), _stop.Token).ConfigureAwait(false);
             }
         }
     }

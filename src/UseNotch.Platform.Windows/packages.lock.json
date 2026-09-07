@@ -2,6 +2,12 @@
   "version": 2,
   "dependencies": {
     "net8.0-windows7.0": {
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Direct",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "9opKRyOKMCi2xJ7Bj7kxtZ1r9vbzosMvRrdEhVhDz8j8MoBGgB+WmC94yH839NPH+BclAjtQ/pyagvi/8gDLkw=="
+      },
       "usenotch.application": {
         "type": "Project",
         "dependencies": {

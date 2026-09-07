@@ -35,6 +35,9 @@ public partial class OverlayViewModel : ObservableObject
     [ObservableProperty]
     private string _activityText = "Activity unavailable";
 
+    [ObservableProperty]
+    private string _anthropicActivityText = "Activity unavailable";
+
     public void LoadDevelopmentScenario()
     {
         if (DevelopmentScenario is not { } scenario)
@@ -102,19 +105,36 @@ public partial class OverlayViewModel : ObservableObject
             AuthenticationState.Unsupported => "Unsupported",
             _ => state.Status.Error?.SafeMessage ?? "Loading",
         };
+        var activity = DescribeActivity(state.Activity);
         if (state.Connection.Provider == ProviderId.OpenAi)
         {
             OpenAiHeadline = headline;
             OpenAiStatusText = status;
             StatusText = status;
-            DetailText = $"OpenAI / Codex quota. {headline}. {status}.";
+            ActivityText = activity;
+            DetailText = $"OpenAI / Codex quota. {headline}. {status}. {activity}.";
         }
         else
         {
             AnthropicHeadline = headline;
             AnthropicStatusText = status;
+            AnthropicActivityText = activity;
         }
     }
+
+    /// <summary>
+    /// Activity is described separately from quota, and an estimate always says so. An unsupported or
+    /// unknown source reads as unavailable rather than as an idle provider.
+    /// </summary>
+    public static string DescribeActivity(ActivityReading? reading) => reading switch
+    {
+        null => "Activity unavailable",
+        { Capability: ActivityCapability.Unsupported } => "Activity unavailable",
+        { Session: null } => "No recent activity observed",
+        { Session: { State: ActivityState.Unknown } } => "Activity unknown",
+        { Session: { Fidelity: ReadingFidelity.Derived } session } => $"{session.State}, estimated",
+        { Session: { } session } => session.State.ToString(),
+    };
 
     public void ShowDetail(string title, string detail)
     {
