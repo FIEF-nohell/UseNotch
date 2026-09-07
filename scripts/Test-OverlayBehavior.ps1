@@ -277,8 +277,8 @@ try {
         throw 'Transparent overlay space did not preserve target focus.'
     }
 
-    # The collapsed handle is right-aligned and vertically centred. Hovering it expands the overlay.
-    $handleX = $rectangle.Right - 32
+    # Nothing is drawn while collapsed; an invisible strip along the docked edge opens the notch.
+    $handleX = $rectangle.Right - 3
     $handleY = [int](($rectangle.Top + $rectangle.Bottom) / 2)
     [UseNotch.OverlaySmoke.Native]::SetCursorPos($handleX, $handleY) | Out-Null
     $overlayWindow = Wait-ForWindow $overlayProcess.Id 'UseNotch overlay open'
@@ -286,10 +286,10 @@ try {
         throw 'Hovering the overlay stole foreground focus.'
     }
 
-    # Once expanded, the two provider cells are right-aligned and stacked around the vertical centre.
-    # Aim at the middle of the upper cell rather than the gap between them.
-    $cellX = $rectangle.Right - 80
-    $cellY = $handleY - 46
+    # Once expanded, the two provider rings are right-aligned in the notch and stacked around the vertical
+    # centre. Aim at the middle of the upper ring rather than the gap between them.
+    $cellX = $rectangle.Right - 46
+    $cellY = $handleY - 45
     Invoke-Click $cellX $cellY
     Start-Sleep -Milliseconds 250
     $targetTitleAfterVisibleClick = [UseNotch.OverlaySmoke.Native]::GetTitle($targetWindow)

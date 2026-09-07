@@ -7,7 +7,7 @@
   </Application.Styles>
   <TrayIcon.Icons>
     <TrayIcons>
-      <TrayIcon Icon="/Assets/tray-mark.ico"
+      <TrayIcon Icon="/Assets/usenotch.ico"
                 ToolTipText="UseNotch status"
                 Clicked="OnTrayIconClicked">
         <TrayIcon.Menu>

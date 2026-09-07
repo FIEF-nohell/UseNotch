@@ -341,9 +341,15 @@ public sealed class ActivityCoordinator : IAsyncDisposable
                         interval = await ObserveOnceAsync().ConfigureAwait(false);
                     }
 
-                    // Reconcile on a fixed cadence, but react immediately when the source says a record
-                    // changed. A source without a change signal simply falls back to the cadence.
-                    await WaitAsync(interval).ConfigureAwait(false);
+                    // Reconcile on a fixed cadence, but react promptly when the source says a record
+                    // changed. A source that writes continuously must not be able to drive observation at
+                    // the debounce rate, so a minimum spacing is always waited out first.
+                    var minimumSpacing = owner._options.Interval < interval ? owner._options.Interval : interval;
+                    await Task.Delay(minimumSpacing, owner._timeProvider, _stop.Token).ConfigureAwait(false);
+                    if (interval > minimumSpacing)
+                    {
+                        await WaitAsync(interval - minimumSpacing).ConfigureAwait(false);
+                    }
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested)
@@ -390,8 +396,14 @@ public sealed class ActivityCoordinator : IAsyncDisposable
                 await owner._dispatcher.DispatchAsync(() => owner._onPublished?.Invoke(provider), _stop.Token).ConfigureAwait(false);
             }
 
-            // Scan quickly only while something is actually happening; otherwise fall back to the slower
-            // rediscovery cadence so an idle machine is not polled twice a second forever.
+            // A source that signals its own changes only needs the slower reconciliation cadence, because
+            // anything interesting arrives through the signal. The fast scan is for a source that has to
+            // be sampled to notice anything at all, and only while something is actually happening.
+            if (_subscription is not null)
+            {
+                return owner._options.IdleInterval;
+            }
+
             return reading.Capability == ActivityCapability.Supported && reading.Session is not null
                 ? owner._options.Interval
                 : owner._options.IdleInterval;

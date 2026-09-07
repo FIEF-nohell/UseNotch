@@ -25,7 +25,11 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     private const int MouseActivateNoActivate = 3;
 
     // Polling the cursor is what makes cross-process click-through possible at all. See ApplyClickThrough.
-    private static readonly TimeSpan CursorPollInterval = TimeSpan.FromMilliseconds(50);
+    // The fast cadence only applies while the pointer is near the overlay; away from it, a much slower
+    // poll is enough and keeps an idle machine idle.
+    private static readonly TimeSpan NearCursorPollInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan FarCursorPollInterval = TimeSpan.FromMilliseconds(400);
+    private const int NearWindowMargin = 64;
 
     private readonly WindowProcedure _windowProcedure;
     private readonly object _gate = new();
@@ -33,9 +37,13 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     private nint _originalWindowProcedure;
     private Func<OverlayRegionSnapshot>? _interactiveRegionProvider;
     private Action? _nativeMetricsChanged;
+    private Action<bool>? _cursorInsideChanged;
     private Timer? _cursorPoll;
     private IReadOnlyList<PixelRect> _cachedRegions = [];
+    private IReadOnlyList<PixelRect> _cachedHoverRegions = [];
+    private bool _cursorInsideHover;
     private bool _clickThroughEnabled;
+    private volatile bool _cursorIsNearWindow;
     private bool _disposed;
 
     public Win32OverlayWindowPlatform() => _windowProcedure = WindowProcedureCallback;
@@ -45,7 +53,8 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     public void Attach(
         nint windowHandle,
         Func<OverlayRegionSnapshot> interactiveRegionProvider,
-        Action nativeMetricsChanged)
+        Action nativeMetricsChanged,
+        Action<bool>? cursorInsideChanged = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentOutOfRangeException.ThrowIfZero(windowHandle);
@@ -59,6 +68,7 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
         _windowHandle = windowHandle;
         _interactiveRegionProvider = interactiveRegionProvider;
         _nativeMetricsChanged = nativeMetricsChanged;
+        _cursorInsideChanged = cursorInsideChanged;
 
         var extendedStyle = GetWindowLongPtr(windowHandle, ExtendedStyleIndex).ToInt64();
         // WS_EX_LAYERED is what makes WS_EX_TRANSPARENT actually forward mouse input to the window
@@ -77,7 +87,7 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
             0,
             SetWindowPosNoSize | SetWindowPosNoMove | SetWindowPosNoActivate | SetWindowPosFrameChanged);
         UpdateInteractiveRegions();
-        _cursorPoll = new Timer(_ => ApplyClickThrough(), null, CursorPollInterval, CursorPollInterval);
+        _cursorPoll = new Timer(_ => PollCursor(), null, FarCursorPollInterval, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
@@ -93,14 +103,20 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
         }
 
         var clientRect = new NativeRect();
-        var regions = GetClientRect(_windowHandle, ref clientRect)
-            ? OverlayRegionScaler.ToClientPixels(
-                _interactiveRegionProvider(),
-                new PixelSize(clientRect.Right - clientRect.Left, clientRect.Bottom - clientRect.Top))
-            : [];
+        var snapshot = _interactiveRegionProvider();
+        IReadOnlyList<PixelRect> regions = [];
+        IReadOnlyList<PixelRect> hoverRegions = [];
+        if (GetClientRect(_windowHandle, ref clientRect))
+        {
+            var clientSize = new PixelSize(clientRect.Right - clientRect.Left, clientRect.Bottom - clientRect.Top);
+            regions = OverlayRegionScaler.ToClientPixels(snapshot.Regions, snapshot.ClientSize, clientSize);
+            hoverRegions = OverlayRegionScaler.ToClientPixels(snapshot.HoverRegions, snapshot.ClientSize, clientSize);
+        }
+
         lock (_gate)
         {
             _cachedRegions = regions;
+            _cachedHoverRegions = hoverRegions;
         }
 
         ApplyClickThrough();
@@ -112,6 +128,27 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     /// window, so it is toggled from the cursor position: the overlay is click-through everywhere except
     /// while the pointer is actually over one of its visible controls.
     /// </summary>
+    /// <summary>
+    /// Reschedules itself instead of running on a fixed cadence, so the fast poll is paid for only while
+    /// the pointer is actually near the overlay.
+    /// </summary>
+    private void PollCursor()
+    {
+        ApplyClickThrough();
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            _cursorPoll?.Change(_cursorIsNearWindow ? NearCursorPollInterval : FarCursorPollInterval, Timeout.InfiniteTimeSpan);
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
     private void ApplyClickThrough()
     {
         if (_disposed || _windowHandle == nint.Zero)
@@ -149,18 +186,51 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     private bool IsCursorOverInteractiveRegion()
     {
         IReadOnlyList<PixelRect> regions;
+        IReadOnlyList<PixelRect> hoverRegions;
         lock (_gate)
         {
             regions = _cachedRegions;
+            hoverRegions = _cachedHoverRegions;
         }
 
-        if (regions.Count == 0 || !GetCursorPos(out var cursor) || !ScreenToClient(_windowHandle, ref cursor))
+        if (!GetCursorPos(out var cursor) || !ScreenToClient(_windowHandle, ref cursor))
+        {
+            _cursorIsNearWindow = false;
+            ReportCursorInsideHover(false);
+            return false;
+        }
+
+        var clientRect = new NativeRect();
+        _cursorIsNearWindow = GetClientRect(_windowHandle, ref clientRect)
+            && cursor.X >= clientRect.Left - NearWindowMargin
+            && cursor.X <= clientRect.Right + NearWindowMargin
+            && cursor.Y >= clientRect.Top - NearWindowMargin
+            && cursor.Y <= clientRect.Bottom + NearWindowMargin;
+
+        var point = new PixelPoint(cursor.X, cursor.Y);
+        ReportCursorInsideHover(hoverRegions.Any(region => region.Contains(point)));
+
+        if (regions.Count == 0)
         {
             return false;
         }
 
-        var point = new PixelPoint(cursor.X, cursor.Y);
         return regions.Any(region => region.Contains(point));
+    }
+
+    /// <summary>
+    /// The overlay is click-through while the pointer is outside a control, so it never receives a
+    /// pointer-entered message of its own. This poll is what tells it the pointer arrived.
+    /// </summary>
+    private void ReportCursorInsideHover(bool inside)
+    {
+        if (inside == _cursorInsideHover)
+        {
+            return;
+        }
+
+        _cursorInsideHover = inside;
+        _cursorInsideChanged?.Invoke(inside);
     }
 
     public void Dispose()

@@ -24,8 +24,23 @@ internal static class Program
             lifetime => lifetime.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
     }
 
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .LogToTrace();
+
+        // A supported software-rendering fallback for machines where the GPU path misbehaves. It is
+        // opt-in, so the normal run keeps hardware rendering.
+        if (Environment.GetCommandLineArgs().Any(argument =>
+                string.Equals(argument, "--software-render", StringComparison.OrdinalIgnoreCase)))
+        {
+            builder = builder.With(new Win32PlatformOptions
+            {
+                RenderingMode = [Win32RenderingMode.Software],
+            });
+        }
+
+        return builder;
+    }
 }

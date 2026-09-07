@@ -5,7 +5,7 @@ namespace UseNotch.Windows.Tests;
 public class OverlayRegionScalerTests
 {
     private static OverlayRegionSnapshot Snapshot(params DipRect[] regions)
-        => new(new DipSize(380, 260), regions);
+        => new(new DipSize(380, 260), regions, []);
 
     [Fact]
     public void At_one_hundred_percent_the_region_keeps_its_device_independent_position()
@@ -71,7 +71,7 @@ public class OverlayRegionScalerTests
     [Fact]
     public void A_snapshot_without_a_usable_surface_produces_no_regions()
         => Assert.Empty(OverlayRegionScaler.ToClientPixels(
-            new OverlayRegionSnapshot(new DipSize(0, 0), [new DipRect(1, 1, 2, 2)]),
+            new OverlayRegionSnapshot(new DipSize(0, 0), [new DipRect(1, 1, 2, 2)], []),
             new PixelSize(665, 455)));
 
     [Fact]

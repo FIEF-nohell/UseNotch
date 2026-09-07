@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using UseNotch.App.ViewModels;
@@ -12,10 +11,17 @@ namespace UseNotch.App.Views;
 
 public partial class OverlayWindow : Window
 {
+    /// <summary>
+    /// How far in from the docked edge the pointer has to come before the notch opens. The strip is
+    /// never drawn, so an idle desktop shows nothing at all.
+    /// </summary>
+    private const double EdgeTriggerWidth = 6;
+
     private readonly OverlayViewModel _viewModel;
     private readonly OverlayHoverDelays _delays;
     private readonly DispatcherTimer _hoverTimer;
     private OverlayTrigger? _pendingHoverTrigger;
+    private bool _cursorInside;
     private bool _allowClose;
 
     public OverlayWindow()
@@ -39,48 +45,37 @@ public partial class OverlayWindow : Window
     public event EventHandler? InteractiveRegionsChanged;
 
     /// <summary>
-    /// Only what is actually visible becomes interactive. There is no invisible hover-capture padding, so
-    /// input outside the drawn surface always reaches the window underneath. Regions are reported in this
-    /// window's own device-independent coordinates; the platform layer converts them to pixels.
+    /// Reports what the overlay currently occupies, in its own device-independent coordinates.
+    /// <para>
+    /// Interactive regions are what accepts a click. Hover regions are only watched for the pointer, so
+    /// the invisible edge strip can open the notch without ever capturing input.
+    /// </para>
     /// </summary>
     public OverlayRegionSnapshot GetInteractiveRegions()
     {
-        var interactiveControls = new List<Control>();
-        if (CollapsedHandle.IsVisible)
-        {
-            interactiveControls.Add(CollapsedHandle);
-        }
+        var interactive = new List<DipRect>();
+        var hover = new List<DipRect>();
 
-        if (ProviderCells.IsVisible)
+        if (NotchBar.IsVisible)
         {
-            interactiveControls.Add(OpenAiCell);
-            interactiveControls.Add(AnthropicCell);
+            AddRegion(interactive, OpenAiCell);
+            AddRegion(interactive, AnthropicCell);
+            AddRegion(hover, NotchBar);
+        }
+        else
+        {
+            // Collapsed: nothing is drawn and nothing is clickable, but the edge strip still watches for
+            // the pointer so the notch can open.
+            hover.Add(new DipRect(ClientSize.Width - EdgeTriggerWidth, 0, EdgeTriggerWidth, ClientSize.Height));
         }
 
         if (DetailPanel.IsVisible)
         {
-            interactiveControls.Add(DetailPanel);
+            AddRegion(interactive, DetailPanel);
+            AddRegion(hover, DetailPanel);
         }
 
-        var regions = new List<DipRect>();
-        foreach (var control in interactiveControls)
-        {
-            if (control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
-            {
-                continue;
-            }
-
-            // A control that cannot be measured yet simply contributes no region, so a failure here can
-            // never widen the interactive surface.
-            if (control.TranslatePoint(default, this) is not { } origin)
-            {
-                continue;
-            }
-
-            regions.Add(new DipRect(origin.X, origin.Y, control.Bounds.Width, control.Bounds.Height));
-        }
-
-        return new OverlayRegionSnapshot(new DipSize(ClientSize.Width, ClientSize.Height), regions);
+        return new OverlayRegionSnapshot(new DipSize(ClientSize.Width, ClientSize.Height), interactive, hover);
     }
 
     public void CloseForShutdown()
@@ -96,6 +91,24 @@ public partial class OverlayWindow : Window
         RefreshRegions();
     }
 
+    /// <summary>
+    /// Called by the platform layer when the pointer enters or leaves the overlay's hover regions. The
+    /// window is click-through while the pointer is outside a control, so Avalonia's own pointer events
+    /// cannot be relied on here.
+    /// </summary>
+    public void SetCursorInside(bool inside)
+    {
+        if (inside == _cursorInside)
+        {
+            return;
+        }
+
+        _cursorInside = inside;
+        ScheduleHover(
+            inside ? OverlayTrigger.PointerEntered : OverlayTrigger.PointerExited,
+            inside ? _delays.Expand : _delays.Collapse);
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         if (!_allowClose)
@@ -105,18 +118,6 @@ public partial class OverlayWindow : Window
         }
 
         base.OnClosing(e);
-    }
-
-    protected override void OnPointerEntered(PointerEventArgs e)
-    {
-        base.OnPointerEntered(e);
-        ScheduleHover(OverlayTrigger.PointerEntered, _delays.Expand);
-    }
-
-    protected override void OnPointerExited(PointerEventArgs e)
-    {
-        base.OnPointerExited(e);
-        ScheduleHover(OverlayTrigger.PointerExited, _delays.Collapse);
     }
 
     /// <summary>
@@ -139,6 +140,23 @@ public partial class OverlayWindow : Window
             _pendingHoverTrigger = null;
             SetPresentation(trigger);
         }
+    }
+
+    private void AddRegion(List<DipRect> regions, Control control)
+    {
+        if (control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        // A control that cannot be measured yet simply contributes no region, so a failure here can never
+        // widen the interactive surface.
+        if (control.TranslatePoint(default, this) is not { } origin)
+        {
+            return;
+        }
+
+        regions.Add(new DipRect(origin.X, origin.Y, control.Bounds.Width, control.Bounds.Height));
     }
 
     private void OnOpenAiClicked(object? sender, RoutedEventArgs e) => OpenDetail(ProviderId.OpenAi);

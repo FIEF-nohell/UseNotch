@@ -27,7 +27,13 @@ public readonly record struct DipRect(double X, double Y, double Width, double H
 /// coordinates. The platform converts to pixels using the window's real client size, so a stale or
 /// mismatched render scaling can never place a region outside the window.
 /// </summary>
-public readonly record struct OverlayRegionSnapshot(DipSize ClientSize, IReadOnlyList<DipRect> Regions);
+/// <param name="Regions">What accepts a click.</param>
+/// <param name="HoverRegions">What is only watched for the pointer, so an invisible edge strip can open
+/// the overlay without ever capturing input.</param>
+public readonly record struct OverlayRegionSnapshot(
+    DipSize ClientSize,
+    IReadOnlyList<DipRect> Regions,
+    IReadOnlyList<DipRect> HoverRegions);
 
 public readonly record struct PixelRect(int X, int Y, int Width, int Height)
 {
@@ -107,28 +113,31 @@ public static class OverlayPlacementCalculator
 public static class OverlayRegionScaler
 {
     public static IReadOnlyList<PixelRect> ToClientPixels(OverlayRegionSnapshot snapshot, PixelSize clientSize)
+        => ToClientPixels(snapshot.Regions, snapshot.ClientSize, clientSize);
+
+    public static IReadOnlyList<PixelRect> ToClientPixels(IReadOnlyList<DipRect> regions, DipSize sourceSize, PixelSize clientSize)
     {
-        if (snapshot.Regions.Count == 0
-            || snapshot.ClientSize.Width <= 0
-            || snapshot.ClientSize.Height <= 0
+        if (regions.Count == 0
+            || sourceSize.Width <= 0
+            || sourceSize.Height <= 0
             || clientSize.Width <= 0
             || clientSize.Height <= 0)
         {
             return [];
         }
 
-        var scaleX = clientSize.Width / snapshot.ClientSize.Width;
-        var scaleY = clientSize.Height / snapshot.ClientSize.Height;
-        var regions = new List<PixelRect>(snapshot.Regions.Count);
-        foreach (var region in snapshot.Regions)
+        var scaleX = clientSize.Width / sourceSize.Width;
+        var scaleY = clientSize.Height / sourceSize.Height;
+        var scaled = new List<PixelRect>(regions.Count);
+        foreach (var region in regions)
         {
             var x = (int)Math.Floor(region.X * scaleX);
             var y = (int)Math.Floor(region.Y * scaleY);
             var right = (int)Math.Ceiling((region.X + region.Width) * scaleX);
             var bottom = (int)Math.Ceiling((region.Y + region.Height) * scaleY);
-            regions.Add(new PixelRect(x, y, right - x, bottom - y));
+            scaled.Add(new PixelRect(x, y, right - x, bottom - y));
         }
 
-        return regions;
+        return scaled;
     }
 }

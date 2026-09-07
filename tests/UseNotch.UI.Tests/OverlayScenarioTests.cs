@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using UseNotch.App.ViewModels;
 using UseNotch.App.Views;
 using UseNotch.Application;
@@ -67,7 +68,8 @@ public class OverlayScenarioTests
         viewModel.ShowDetail(ProviderId.OpenAi);
 
         Assert.Contains("estimated", viewModel.OpenAi.ActivityText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("estimated", viewModel.DetailText, StringComparison.OrdinalIgnoreCase);
+        Assert.Same(viewModel.OpenAi, viewModel.DetailProvider);
+        Assert.Contains("estimated", viewModel.DetailProvider!.ActivityText, StringComparison.OrdinalIgnoreCase);
     }
 
     [AvaloniaFact]
@@ -129,8 +131,7 @@ public class OverlayScenarioTests
         Assert.NotEqual(
             SeverityConverters.BrushFor(viewModel.OpenAi.Severity),
             SeverityConverters.BrushFor(viewModel.Anthropic.Severity));
-        Assert.Equal("OPENAI", viewModel.OpenAi.ShortName);
-        Assert.Equal("ANTHROPIC", viewModel.Anthropic.ShortName);
+        Assert.NotEqual(ProviderGlyphs.For(ProviderId.OpenAi), ProviderGlyphs.For(ProviderId.Anthropic));
     }
 
     [AvaloniaFact]
@@ -165,10 +166,11 @@ public class OverlayScenarioTests
 
         viewModel.ShowDetail(ProviderId.OpenAi);
 
-        Assert.Contains("5h limit", viewModel.DetailText, StringComparison.Ordinal);
-        Assert.Contains("40% used", viewModel.DetailText, StringComparison.Ordinal);
-        Assert.Contains("60% remaining", viewModel.DetailText, StringComparison.Ordinal);
-        Assert.Contains("Last successful reading", viewModel.DetailText, StringComparison.Ordinal);
+        var row = Assert.Single(viewModel.DetailProvider!.Windows);
+        Assert.Equal("5h limit", row.Label);
+        Assert.Equal("40% Used", row.UsedText);
+        Assert.Equal(.4, row.Fraction, 3);
+        Assert.StartsWith("Resets in", row.ResetText, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
@@ -179,7 +181,10 @@ public class OverlayScenarioTests
 
         viewModel.ShowDetail(ProviderId.OpenAi);
 
-        Assert.Contains("over its limit", viewModel.DetailText, StringComparison.OrdinalIgnoreCase);
+        // The ring stops at a full circle while the number keeps telling the truth.
+        Assert.Equal("120% used", viewModel.OpenAi.Headline);
+        Assert.Equal(1.0, viewModel.OpenAi.RingFraction);
+        Assert.Equal(QuotaSeverity.Exhausted, Assert.Single(viewModel.DetailProvider!.Windows).Severity);
     }
 
     [AvaloniaFact]
@@ -220,22 +225,19 @@ public class OverlayScenarioTests
         {
             window.Show();
             window.SetPresentation(OverlayTrigger.Show);
-            var collapsed = window.GetInteractiveRegions().Regions;
+            var collapsed = window.GetInteractiveRegions();
 
             window.SetPresentation(OverlayTrigger.PointerEntered);
-            var expanded = window.GetInteractiveRegions().Regions;
+            var expanded = window.GetInteractiveRegions();
 
-            Assert.Single(collapsed);
-            // The handle is right-aligned and vertically centred, so its region must not sit at the
-            // window origin. A region at 0,0 would make transparent space capture input.
-            Assert.True(collapsed[0].X > window.Width / 2, $"Collapsed handle region started at {collapsed[0].X}.");
-            Assert.True(collapsed[0].Y > window.Height / 4, $"Collapsed handle region started at {collapsed[0].Y}.");
-            Assert.Equal(2, expanded.Count);
-            Assert.All(expanded, region => Assert.True(region.Width > 0 && region.Height > 0));
+            // Collapsed draws nothing and captures nothing. Only an invisible edge strip is watched, and
+            // watching is not capturing.
+            Assert.Empty(collapsed.Regions);
+            var strip = Assert.Single(collapsed.HoverRegions);
+            Assert.True(strip.X > window.Width - 16, $"The trigger strip started at {strip.X}.");
 
-            // The collapsed handle is genuinely smaller than the expanded cells, so no invisible padding
-            // is capturing input while the overlay looks closed.
-            Assert.True(collapsed[0].Width * collapsed[0].Height < expanded.Sum(region => region.Width * region.Height));
+            Assert.Equal(2, expanded.Regions.Count);
+            Assert.All(expanded.Regions, region => Assert.True(region.Width > 0 && region.Height > 0));
         }
         finally
         {
@@ -276,11 +278,13 @@ public class OverlayScenarioTests
         try
         {
             window.Show();
-            var panel = window.FindControl<Border>("DetailPanel");
+            var panel = window.FindControl<Grid>("DetailPanel");
+            var bubble = panel?.GetVisualDescendants().OfType<Border>().FirstOrDefault();
 
             Assert.NotNull(panel);
-            Assert.InRange(panel.Width, 300, 340);
-            Assert.True(panel.MaxHeight <= window.Height);
+            Assert.NotNull(bubble);
+            Assert.InRange(bubble.Width, 260, 340);
+            Assert.True(panel.Bounds.Height <= window.Height);
         }
         finally
         {

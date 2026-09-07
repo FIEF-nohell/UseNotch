@@ -59,7 +59,8 @@ public sealed class OverlayController : IDisposable
         _windowPlatform.Attach(
             handle,
             window.GetInteractiveRegions,
-            OnNativeMetricsChanged);
+            OnNativeMetricsChanged,
+            OnCursorInsideChanged);
         window.Opacity = 1;
         ForegroundWindowAfterShow = _windowPlatform.GetForegroundWindow();
         Dispatcher.UIThread.Post(
@@ -136,6 +137,15 @@ public sealed class OverlayController : IDisposable
             _windowPlatform.UpdateInteractiveRegions();
         }
     }
+
+    private void OnCursorInsideChanged(bool inside) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_disposed)
+            {
+                _window?.SetCursorInside(inside);
+            }
+        });
 
     private void OnNativeMetricsChanged() =>
         Dispatcher.UIThread.Post(() =>

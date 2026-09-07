@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UseNotch.Application;
@@ -5,13 +6,21 @@ using UseNotch.Domain;
 
 namespace UseNotch.App.ViewModels;
 
+/// <summary>
+/// One quota window as the detail panel presents it: what it covers, when it resets, and how full it is.
+/// </summary>
+public sealed record QuotaWindowRow(string Label, string ResetText, string UsedText, double Fraction, QuotaSeverity Severity);
+
 public partial class ProviderCellViewModel(ProviderId provider, string displayName) : ObservableObject
 {
     public ProviderId Provider => provider;
 
     public string DisplayName => displayName;
 
-    public string ShortName { get; } = provider == ProviderId.OpenAi ? "OPENAI" : "ANTHROPIC";
+    public string DetailTitle { get; } = provider == ProviderId.OpenAi ? "Codex Usage" : "Claude Usage";
+
+    [ObservableProperty]
+    private string _percentText = "-";
 
     [ObservableProperty]
     private string _headline = "-";
@@ -43,16 +52,18 @@ public partial class ProviderCellViewModel(ProviderId provider, string displayNa
     [ObservableProperty]
     private string _automationName = "No reading";
 
-    [ObservableProperty]
-    private string _detailText = "No reading yet.";
-
     /// <summary>
-    /// Every compact number is restated here with the window it belongs to, so nothing shown in the
-    /// collapsed surface is left without a named meaning.
+    /// Every window the provider reported, so the compact percentage on the ring is never the only place
+    /// a number appears without the window it belongs to.
     /// </summary>
-    public void Apply(QuotaDisplay display, string statusText, ActivityReading? activity, ProviderRuntimeState? state)
+    public ObservableCollection<QuotaWindowRow> Windows { get; } = [];
+
+    public void Apply(QuotaDisplay display, string statusText, ActivityReading? activity, ProviderRuntimeState? state, DateTimeOffset now)
     {
         Headline = display.ValueText;
+        PercentText = display.RingFraction is { } fraction
+            ? string.Create(CultureInfo.InvariantCulture, $"{Math.Round(fraction * 100):0}%")
+            : "-";
         ScopeText = display.ScopeText;
         FreshnessText = display.FreshnessText;
         RingFraction = display.RingFraction;
@@ -62,38 +73,69 @@ public partial class ProviderCellViewModel(ProviderId provider, string displayNa
         ActivityText = OverlayViewModel.DescribeActivity(activity);
         IsWorking = activity?.Session?.State == ActivityState.Working;
         IsWaiting = activity?.Session?.State == ActivityState.Waiting;
-        DetailText = BuildDetail(display, statusText, state);
+        RebuildWindows(state, statusText, now);
     }
 
-    private string BuildDetail(QuotaDisplay display, string statusText, ProviderRuntimeState? state)
+    private void RebuildWindows(ProviderRuntimeState? state, string statusText, DateTimeOffset now)
     {
-        var lines = new List<string> { $"{DisplayName}: {statusText}." };
-        if (state?.Snapshot is { } snapshot)
+        Windows.Clear();
+        if (state?.Snapshot is not { } snapshot || snapshot.Windows.Count == 0)
         {
-            foreach (var window in snapshot.Windows)
-            {
-                var used = window.Limit.UsedFraction is { } fraction
-                    ? string.Create(CultureInfo.InvariantCulture, $"{fraction * 100:0}% used, {Math.Max(0, 100 - (fraction * 100)):0}% remaining")
-                    : "value unavailable";
-                var reset = window.ResetsAt is { } resets
-                    ? ", resets " + resets.ToLocalTime().ToString("t", CultureInfo.CurrentCulture)
-                    : string.Empty;
-                lines.Add($"{window.Scope}: {used}{reset}.");
-            }
-        }
-        else
-        {
-            lines.Add($"{display.ScopeText}: {display.ValueText}.");
+            Windows.Add(new QuotaWindowRow(statusText, string.Empty, FreshnessText, 0, QuotaSeverity.Unavailable));
+            return;
         }
 
-        if (display.IsOverLimit)
+        foreach (var window in snapshot.Windows)
         {
-            lines.Add("This window is over its limit; the ring stops at a full circle.");
+            var fraction = window.Limit.UsedFraction;
+            var used = fraction is { } value
+                ? string.Create(CultureInfo.InvariantCulture, $"{Math.Round(value * 100):0}% Used")
+                : "Value unavailable";
+            Windows.Add(new QuotaWindowRow(
+                window.Scope,
+                DescribeReset(window.ResetsAt, now),
+                used,
+                fraction is { } clamped ? Math.Clamp((double)clamped, 0, 1) : 0,
+                SeverityFor(fraction)));
+        }
+    }
+
+    private static QuotaSeverity SeverityFor(decimal? fraction) => fraction switch
+    {
+        null => QuotaSeverity.Unavailable,
+        >= 1m => QuotaSeverity.Exhausted,
+        >= (decimal)QuotaDisplay.CautionThreshold => QuotaSeverity.Caution,
+        _ => QuotaSeverity.Normal,
+    };
+
+    /// <summary>
+    /// A near reset reads as a countdown and a distant one as a local time, which is how a person thinks
+    /// about "when do I get this back".
+    /// </summary>
+    private static string DescribeReset(DateTimeOffset? resetsAt, DateTimeOffset now)
+    {
+        if (resetsAt is not { } reset)
+        {
+            return string.Empty;
         }
 
-        lines.Add($"Last successful reading: {display.FreshnessText}.");
-        lines.Add($"Activity: {ActivityText}.");
-        return string.Join(Environment.NewLine, lines);
+        var remaining = reset - now;
+        if (remaining <= TimeSpan.Zero)
+        {
+            return "Resets now";
+        }
+
+        if (remaining < TimeSpan.FromHours(1))
+        {
+            return string.Create(CultureInfo.CurrentCulture, $"Resets in {Math.Max(1, Math.Round(remaining.TotalMinutes)):0} min");
+        }
+
+        if (remaining < TimeSpan.FromHours(12))
+        {
+            return string.Create(CultureInfo.CurrentCulture, $"Resets in {Math.Round(remaining.TotalHours):0} h");
+        }
+
+        return "Resets " + reset.ToLocalTime().ToString("ddd h:mm tt", CultureInfo.CurrentCulture);
     }
 }
 
@@ -124,10 +166,7 @@ public partial class OverlayViewModel : ObservableObject
     private double _uiScale = 1.0;
 
     [ObservableProperty]
-    private string _detailTitle = "OpenAI / Codex status";
-
-    [ObservableProperty]
-    private string _detailText = "No reading yet.";
+    private ProviderCellViewModel? _detailProvider;
 
     public bool ShowsProviderCells => Presentation.ShowsProviderCells;
 
@@ -174,21 +213,24 @@ public partial class OverlayViewModel : ObservableObject
 
     private void ApplyRuntimeState(ProviderRuntimeState state, string? statusOverride)
     {
+        var now = _clock.GetUtcNow();
         var cell = state.Connection.Provider == ProviderId.OpenAi ? OpenAi : Anthropic;
-        var display = QuotaDisplay.From(cell.DisplayName, state, _clock.GetUtcNow());
-        cell.Apply(display, statusOverride ?? DescribeStatus(state), state.Activity, state);
+        var display = QuotaDisplay.From(cell.DisplayName, state, now);
+        cell.Apply(display, statusOverride ?? DescribeStatus(state), state.Activity, state, now);
         OnPropertyChanged(nameof(ShowsBusyMotion));
     }
 
     public void ShowDetail(ProviderId provider)
     {
-        var cell = provider == ProviderId.OpenAi ? OpenAi : Anthropic;
-        DetailTitle = cell.DisplayName + " status";
-        DetailText = cell.DetailText;
+        DetailProvider = provider == ProviderId.OpenAi ? OpenAi : Anthropic;
         Apply(OverlayTrigger.ProviderActivated);
     }
 
-    public void HideDetail() => Apply(OverlayTrigger.DetailsClosed);
+    public void HideDetail()
+    {
+        Apply(OverlayTrigger.DetailsClosed);
+        DetailProvider = null;
+    }
 
     public static string DescribeStatus(ProviderRuntimeState state) => state.Status.Authentication switch
     {

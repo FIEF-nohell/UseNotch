@@ -230,12 +230,13 @@ public partial class App : Avalonia.Application
 
         var enableCodex = settings.OpenAi.Enabled || HasArgument("--enable-codex");
         var enableClaude = settings.Anthropic.Enabled || HasArgument("--enable-claude");
-        if (!enableCodex && !enableClaude)
+        if (enableCodex || enableClaude)
         {
-            return;
+            StartProviderPolling(enableCodex, enableClaude, settings.Privacy.ActivityMonitoringEnabled);
         }
 
-        StartProviderPolling(enableCodex, enableClaude, settings.Privacy.ActivityMonitoringEnabled);
+        // Placement and visibility belong to the overlay, not to whether a provider happens to be
+        // enabled. Disabling both providers must not silently leave the overlay wherever it started.
         ApplyOverlaySettings(settings.Overlay);
     }
 

@@ -5,8 +5,8 @@
         x:Class="UseNotch.App.Views.OverlayWindow"
         x:DataType="vm:OverlayViewModel"
         Title="UseNotch overlay"
-        Width="380"
-        Height="260"
+        Width="440"
+        Height="320"
         Background="Transparent"
         CanResize="False"
         ShowActivated="False"
@@ -16,131 +16,192 @@
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="Manual">
   <Grid Background="Transparent">
-    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
-      <!-- Collapsed handle. It is the only visible surface until the pointer arrives. -->
-      <Border x:Name="CollapsedHandle"
-              Width="64" Height="12"
-              HorizontalAlignment="Right"
-              Background="#F0101216"
-              BorderBrush="#343B46"
-              BorderThickness="1"
-              CornerRadius="6"
-              IsVisible="{Binding !ShowsProviderCells}"
-              AutomationProperties.Name="UseNotch overlay handle" />
 
-      <StackPanel x:Name="ProviderCells" Spacing="8" IsVisible="{Binding ShowsProviderCells}">
+    <!--
+      The notch. Nothing at all is drawn until the pointer reaches the screen edge, so an idle desktop
+      shows no trace of this window. The bar hugs the edge and is rounded only on the inner side.
+    -->
+    <Border x:Name="NotchBar"
+            IsVisible="{Binding ShowsProviderCells}"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+            Width="92"
+            Background="#FF000000"
+            CornerRadius="26,0,0,26"
+            Padding="0,18">
+      <StackPanel Spacing="16">
         <Button x:Name="OpenAiCell"
-                Classes="overlayCell"
+                Classes="providerItem"
                 Click="OnOpenAiClicked"
                 AutomationProperties.Name="{Binding OpenAi.AutomationName}">
-          <Grid ColumnDefinitions="Auto,12,*" VerticalAlignment="Center">
-            <controls:QuotaRing Width="36" Height="36"
-                                Fraction="{Binding OpenAi.RingFraction}"
-                                ArcBrush="{Binding OpenAi.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
-            <StackPanel Grid.Column="2" Spacing="2">
-              <TextBlock Text="{Binding OpenAi.ShortName}" Classes="providerLabel" />
-              <TextBlock Text="{Binding OpenAi.Headline}" Classes="providerValue" />
-              <TextBlock Text="{Binding OpenAi.ScopeText}" Classes="providerScope" />
-            </StackPanel>
-          </Grid>
+          <StackPanel Spacing="2" HorizontalAlignment="Center">
+            <Panel Width="56" Height="56">
+              <controls:QuotaRing Width="56" Height="56"
+                                  StrokeThickness="4"
+                                  Fraction="{Binding OpenAi.RingFraction}">
+                <controls:QuotaRing.ArcBrush>
+                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
+                    <Binding Path="OpenAi.Severity" />
+                    <Binding Path="OpenAi.Provider" />
+                  </MultiBinding>
+                </controls:QuotaRing.ArcBrush>
+              </controls:QuotaRing>
+              <Path Data="{x:Static vm:ProviderGlyphs.OpenAi}"
+                    Fill="#FFF2F4F7"
+                    Width="24" Height="24"
+                    Stretch="Uniform"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Panel>
+            <TextBlock Text="{Binding OpenAi.PercentText}" Classes="percent" />
+          </StackPanel>
         </Button>
 
         <Button x:Name="AnthropicCell"
-                Classes="overlayCell"
+                Classes="providerItem"
                 Click="OnAnthropicClicked"
                 AutomationProperties.Name="{Binding Anthropic.AutomationName}">
-          <Grid ColumnDefinitions="Auto,12,*" VerticalAlignment="Center">
-            <controls:QuotaRing Width="36" Height="36"
-                                Fraction="{Binding Anthropic.RingFraction}"
-                                ArcBrush="{Binding Anthropic.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
-            <StackPanel Grid.Column="2" Spacing="2">
-              <TextBlock Text="{Binding Anthropic.ShortName}" Classes="providerLabel" />
-              <TextBlock Text="{Binding Anthropic.Headline}" Classes="providerValue" />
-              <TextBlock Text="{Binding Anthropic.ScopeText}" Classes="providerScope" />
-            </StackPanel>
-          </Grid>
+          <StackPanel Spacing="2" HorizontalAlignment="Center">
+            <Panel Width="56" Height="56">
+              <controls:QuotaRing Width="56" Height="56"
+                                  StrokeThickness="4"
+                                  Fraction="{Binding Anthropic.RingFraction}">
+                <controls:QuotaRing.ArcBrush>
+                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
+                    <Binding Path="Anthropic.Severity" />
+                    <Binding Path="Anthropic.Provider" />
+                  </MultiBinding>
+                </controls:QuotaRing.ArcBrush>
+              </controls:QuotaRing>
+              <Path Data="{x:Static vm:ProviderGlyphs.Anthropic}"
+                    Fill="#FFF2F4F7"
+                    Width="24" Height="24"
+                    Stretch="Uniform"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Panel>
+            <TextBlock Text="{Binding Anthropic.PercentText}" Classes="percent" />
+          </StackPanel>
         </Button>
       </StackPanel>
-    </StackPanel>
+    </Border>
 
-    <Border x:Name="DetailPanel"
-            IsVisible="{Binding ShowsDetails}"
-            Width="300"
-            MaxHeight="240"
-            Padding="16"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Center"
-            Background="#F0191D24"
-            BorderBrush="#343B46"
-            BorderThickness="1"
-            CornerRadius="8">
-      <ScrollViewer>
-        <StackPanel Spacing="8">
-          <TextBlock x:Name="DetailTitle" Text="{Binding DetailTitle}" Classes="detailTitle" />
-          <TextBlock x:Name="DetailText" Text="{Binding DetailText}" TextWrapping="Wrap" Classes="detailText" />
+    <!-- Detail callout, pointing at the notch. -->
+    <Grid x:Name="DetailPanel"
+          IsVisible="{Binding ShowsDetails}"
+          HorizontalAlignment="Right"
+          VerticalAlignment="Center"
+          Margin="0,0,92,0">
+      <Border Background="#FF000000"
+              CornerRadius="18"
+              Padding="18,16"
+              Width="300"
+              Margin="0,0,10,0">
+        <StackPanel Spacing="12" DataContext="{Binding DetailProvider}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Data="{Binding Provider, Converter={x:Static vm:ProviderGlyphs.ToGlyph}}"
+                  Fill="#FFF2F4F7"
+                  Width="18" Height="18"
+                  Stretch="Uniform"
+                  VerticalAlignment="Center" />
+            <TextBlock x:Name="DetailTitle" Text="{Binding DetailTitle}" Classes="detailTitle" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <ItemsControl ItemsSource="{Binding Windows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:QuotaWindowRow">
+                <StackPanel Spacing="6" Margin="0,0,0,10">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Label}" Classes="windowLabel" />
+                    <TextBlock Grid.Column="1" Text="{Binding ResetText}" Classes="windowReset" />
+                  </Grid>
+                  <Border Background="#FF23262C" CornerRadius="3" Height="6">
+                    <Border HorizontalAlignment="Left"
+                            CornerRadius="3"
+                            Background="{Binding Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}"
+                            Width="{Binding Fraction, Converter={x:Static vm:SeverityConverters.ToBarWidth}}" />
+                  </Border>
+                  <TextBlock Text="{Binding UsedText}" Classes="windowUsed" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock x:Name="DetailText" Text="{Binding FreshnessText}" Classes="detailFooter" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding ActivityText}" Classes="detailFooter" TextWrapping="Wrap" />
           <Button x:Name="CloseDetail"
                   Classes="detailClose"
                   Content="Close"
                   Click="OnCloseDetailClicked"
                   AutomationProperties.Name="Close provider details" />
         </StackPanel>
-      </ScrollViewer>
-    </Border>
+      </Border>
+
+      <!-- The tail that ties the callout to the notch. -->
+      <Path Data="M 0,0 L 10,10 L 0,20 Z"
+            Fill="#FF000000"
+            Width="10" Height="20"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center" />
+    </Grid>
   </Grid>
 
   <Window.Styles>
-    <Style Selector="Button.overlayCell">
-      <Setter Property="MinWidth" Value="152" />
-      <Setter Property="MinHeight" Value="56" />
-      <Setter Property="Padding" Value="12" />
-      <Setter Property="Background" Value="#F0101216" />
-      <Setter Property="BorderBrush" Value="#343B46" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Style Selector="Button.providerItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.overlayCell:pointerover">
-      <Setter Property="Background" Value="#F01A1F27" />
-      <Setter Property="BorderBrush" Value="#687588" />
+    <Style Selector="Button.providerItem:pointerover">
+      <Setter Property="Background" Value="#1AFFFFFF" />
     </Style>
-    <Style Selector="Button.overlayCell:pressed">
-      <Setter Property="Background" Value="#F00B0D11" />
+    <Style Selector="Button.providerItem:pressed">
+      <Setter Property="Background" Value="#0DFFFFFF" />
     </Style>
-    <Style Selector="Button.overlayCell:focus-visible">
-      <Setter Property="BorderBrush" Value="#8AB4FF" />
+    <Style Selector="Button.providerItem:focus-visible">
+      <Setter Property="BorderBrush" Value="#FF8AB4FF" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
-    <Style Selector="TextBlock.providerLabel">
-      <Setter Property="FontSize" Value="12" />
+    <Style Selector="TextBlock.percent">
+      <Setter Property="FontSize" Value="19" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#B3BBC7" />
-    </Style>
-    <Style Selector="TextBlock.providerValue">
-      <Setter Property="FontSize" Value="17" />
-      <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Segoe UI" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#F2F4F7" />
-    </Style>
-    <Style Selector="TextBlock.providerScope">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#B3BBC7" />
+      <Setter Property="Foreground" Value="#FFF2F4F7" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.detailTitle">
-      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#F2F4F7" />
+      <Setter Property="Foreground" Value="#FFF2F4F7" />
     </Style>
-    <Style Selector="TextBlock.detailText">
+    <Style Selector="TextBlock.windowLabel">
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="Foreground" Value="#B3BBC7" />
+      <Setter Property="Foreground" Value="#FFF2F4F7" />
+    </Style>
+    <Style Selector="TextBlock.windowReset">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#FFB3BBC7" />
+    </Style>
+    <Style Selector="TextBlock.windowUsed">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#FFB3BBC7" />
+    </Style>
+    <Style Selector="TextBlock.detailFooter">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#FF8A93A0" />
     </Style>
     <Style Selector="Button.detailClose">
       <Setter Property="HorizontalAlignment" Value="Left" />
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="Padding" Value="12,4" />
+      <Setter Property="Background" Value="#FF171B21" />
+      <Setter Property="Foreground" Value="#FFD6DDE7" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
     </Style>
     <Style Selector="Button.detailClose:focus-visible">
-      <Setter Property="BorderBrush" Value="#8AB4FF" />
+      <Setter Property="BorderBrush" Value="#FF8AB4FF" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
   </Window.Styles>

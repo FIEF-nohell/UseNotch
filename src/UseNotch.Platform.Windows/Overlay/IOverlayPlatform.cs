@@ -12,7 +12,8 @@ public interface IOverlayWindowPlatform : IDisposable
     void Attach(
         nint windowHandle,
         Func<OverlayRegionSnapshot> interactiveRegionProvider,
-        Action nativeMetricsChanged);
+        Action nativeMetricsChanged,
+        Action<bool>? cursorInsideChanged = null);
 
     void UpdateInteractiveRegions();
 }
