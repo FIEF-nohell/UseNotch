@@ -234,7 +234,15 @@ public class OverlayScenarioTests
             // watching is not capturing.
             Assert.Empty(collapsed.Regions);
             var strip = Assert.Single(collapsed.HoverRegions);
-            Assert.True(strip.X > window.Width - 16, $"The trigger strip started at {strip.X}.");
+
+            // The strip must hug the docked edge and reach it exactly, because the pointer thrown at the
+            // screen edge stops on the last pixel.
+            Assert.Equal(window.Width, strip.X + strip.Width, precision: 3);
+
+            // Wide enough to be reachable without slamming into the edge, but nothing like the whole
+            // window: padding the overlay's full width with a hover region would open it from anywhere.
+            Assert.InRange(strip.Width, 16, window.Width / 4);
+            Assert.Equal(window.Height, strip.Height, precision: 3);
 
             Assert.Equal(2, expanded.Regions.Count);
             Assert.All(expanded.Regions, region => Assert.True(region.Width > 0 && region.Height > 0));

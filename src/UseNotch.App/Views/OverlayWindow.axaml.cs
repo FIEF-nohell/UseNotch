@@ -13,9 +13,16 @@ public partial class OverlayWindow : Window
 {
     /// <summary>
     /// How far in from the docked edge the pointer has to come before the notch opens. The strip is
-    /// never drawn, so an idle desktop shows nothing at all.
+    /// never drawn and never accepts a click, so an idle desktop shows nothing at all and nothing under
+    /// the strip loses input. It is only watched for the pointer.
+    /// <para>
+    /// This was six device-independent pixels, which is about ten physical pixels at 175% scale. That
+    /// only worked if the pointer was thrown hard enough to stop against the screen edge; approaching
+    /// deliberately and stopping just short of the edge missed the strip entirely. Widening it costs
+    /// nothing, because widening a hover region cannot capture input.
+    /// </para>
     /// </summary>
-    private const double EdgeTriggerWidth = 6;
+    private const double EdgeTriggerWidth = 28;
 
     private readonly OverlayViewModel _viewModel;
     private readonly OverlayHoverDelays _delays;

@@ -74,7 +74,12 @@ public sealed record OverlayHoverDelays(TimeSpan Expand, TimeSpan Collapse)
 {
     // Bounded on both sides: long enough that a pointer crossing the edge does not flash the overlay
     // open, short enough that a deliberate hover feels immediate.
-    public static OverlayHoverDelays Default { get; } = new(TimeSpan.FromMilliseconds(120), TimeSpan.FromMilliseconds(260));
+    //
+    // The expand delay is added on top of however long the platform took to notice the pointer, so it
+    // is kept small. The collapse delay is deliberately the more generous of the two: losing the
+    // overlay to a small twitch means starting the whole approach again, which is far more annoying
+    // than it staying open a moment longer than needed.
+    public static OverlayHoverDelays Default { get; } = new(TimeSpan.FromMilliseconds(90), TimeSpan.FromMilliseconds(420));
 }
 
 public enum QuotaSeverity { None, Normal, Caution, Exhausted, Unavailable }

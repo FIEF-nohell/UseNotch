@@ -28,7 +28,11 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
     // The fast cadence only applies while the pointer is near the overlay; away from it, a much slower
     // poll is enough and keeps an idle machine idle.
     private static readonly TimeSpan NearCursorPollInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan FarCursorPollInterval = TimeSpan.FromMilliseconds(400);
+    // The far interval is the worst case for noticing the pointer at all: the fast interval only
+    // applies once a poll has already seen the pointer nearby. At 400ms a deliberate move to the
+    // edge could sit unnoticed for most of a second, which read as the overlay ignoring the
+    // pointer. Reading the cursor position is a cheap syscall, so paying it more often is fair.
+    private static readonly TimeSpan FarCursorPollInterval = TimeSpan.FromMilliseconds(150);
     private const int NearWindowMargin = 64;
 
     private readonly WindowProcedure _windowProcedure;
