@@ -72,19 +72,30 @@ public partial class OverlayWindow : Window
     public OverlayRegionSnapshot GetInteractiveRegions()
     {
         var interactive = new List<DipRect>();
-        var hover = new List<DipRect>();
+
+        // The edge strip is watched in every state, not only while collapsed. Whatever opens the notch
+        // has to keep it open, or the overlay collapses under a pointer that never moved.
+        //
+        // The strip runs the full height of the window while the notch itself is far shorter, so a
+        // pointer resting on the strip above or below the notch used to be inside the watched region
+        // when collapsed and outside it the instant the notch appeared. That collapsed it, which
+        // restored the strip, which opened it again: a flicker loop with the pointer held still.
+        var hover = new List<DipRect>
+        {
+            new(ClientSize.Width - EdgeTriggerWidth, 0, EdgeTriggerWidth, ClientSize.Height),
+        };
 
         if (NotchBar.IsVisible)
         {
-            AddRegion(interactive, OpenAiCell);
-            AddRegion(interactive, AnthropicCell);
-            AddRegion(hover, NotchBar);
-        }
-        else
-        {
-            // Collapsed: nothing is drawn and nothing is clickable, but the edge strip still watches for
-            // the pointer so the notch can open.
-            hover.Add(new DipRect(ClientSize.Width - EdgeTriggerWidth, 0, EdgeTriggerWidth, ClientSize.Height));
+            // Everything under the notch is reported at its resting position, with the slide taken back
+            // out. TranslatePoint walks the render transform too, so mid-animation these would be
+            // reported up to the entrance offset away from where they will settle, which pushed them off
+            // the window entirely. Nothing recomputes regions when a transition ends, so the cells would
+            // have stayed unclickable after the notch finished arriving.
+            var slide = _notchSlide?.X ?? 0;
+            AddRegion(interactive, OpenAiCell, slide);
+            AddRegion(interactive, AnthropicCell, slide);
+            AddRegion(hover, NotchBar, slide);
         }
 
         if (DetailPanel.IsVisible)
@@ -160,7 +171,7 @@ public partial class OverlayWindow : Window
         }
     }
 
-    private void AddRegion(List<DipRect> regions, Control control)
+    private void AddRegion(List<DipRect> regions, Control control, double horizontalOffset = 0)
     {
         if (control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
         {
@@ -174,7 +185,7 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        regions.Add(new DipRect(origin.X, origin.Y, control.Bounds.Width, control.Bounds.Height));
+        regions.Add(new DipRect(origin.X - horizontalOffset, origin.Y, control.Bounds.Width, control.Bounds.Height));
     }
 
     /// <summary>

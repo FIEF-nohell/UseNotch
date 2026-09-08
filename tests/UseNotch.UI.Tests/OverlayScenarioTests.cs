@@ -248,6 +248,15 @@ public class OverlayScenarioTests
 
             Assert.Equal(2, expanded.Regions.Count);
             Assert.All(expanded.Regions, region => Assert.True(region.Width > 0 && region.Height > 0));
+
+            // Whatever opens the notch has to keep it open. The strip runs the full height of the
+            // window and the notch is far shorter, so if opening dropped the strip from the watched
+            // set, a pointer resting above or below the notch would leave the moment it appeared:
+            // collapse, strip returns, open again, with the pointer never moving.
+            Assert.Contains(expanded.HoverRegions, region =>
+                Math.Abs(region.X - strip.X) < 0.001
+                && Math.Abs(region.Width - strip.Width) < 0.001
+                && Math.Abs(region.Height - strip.Height) < 0.001);
         }
         finally
         {
