@@ -1,190 +1,524 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UseNotch.App.ViewModels"
-        xmlns:app="using:UseNotch.Application"
         x:Class="UseNotch.App.Views.MainWindow"
         x:DataType="vm:SettingsViewModel"
         Title="UseNotch"
-        Width="820" Height="620"
-        MinWidth="640" MinHeight="480"
-        Background="#101216"
+        Width="880" Height="640"
+        MinWidth="700" MinHeight="520"
+        Background="#0A0A0B"
         FontFamily="Segoe UI"
         WindowStartupLocation="CenterScreen">
-  <Grid ColumnDefinitions="190,*">
-    <Border Background="#0C0E12" BorderBrush="#1E242E" BorderThickness="0,0,1,0">
-      <StackPanel Margin="12,16" Spacing="10">
-        <TextBlock Text="UseNotch" FontSize="17" FontWeight="SemiBold" Foreground="#F2F4F7" />
-        <TextBlock Text="Local assistant usage" FontSize="12" Foreground="#7F8B9C" />
-        <ItemsControl ItemsSource="{Binding Sections}" Margin="0,10,0,0">
+
+  <!--
+    Neutral greys throughout. The overlay is pure black against arbitrary desktop content, so a blue
+    cast here would read as a different product. Colour is spent only where it carries meaning: the
+    selected section, and a destructive action.
+  -->
+  <Window.Resources>
+    <SolidColorBrush x:Key="Sidebar">#060607</SolidColorBrush>
+    <SolidColorBrush x:Key="Raised">#141416</SolidColorBrush>
+    <SolidColorBrush x:Key="RaisedHover">#1B1B1F</SolidColorBrush>
+    <SolidColorBrush x:Key="Divider">#1C1C20</SolidColorBrush>
+    <SolidColorBrush x:Key="Edge">#26262B</SolidColorBrush>
+    <SolidColorBrush x:Key="TextPrimary">#F4F4F5</SolidColorBrush>
+    <SolidColorBrush x:Key="TextSecondary">#A1A1AA</SolidColorBrush>
+    <SolidColorBrush x:Key="TextDim">#6B6B73</SolidColorBrush>
+    <SolidColorBrush x:Key="Accent">#1FD69F</SolidColorBrush>
+    <SolidColorBrush x:Key="Danger">#FF5C4D</SolidColorBrush>
+  </Window.Resources>
+
+  <Grid ColumnDefinitions="212,*">
+
+    <!-- Navigation. Compact, and it says which section is open rather than only which is hovered. -->
+    <Border Background="{StaticResource Sidebar}"
+            BorderBrush="{StaticResource Divider}"
+            BorderThickness="0,0,1,0">
+      <DockPanel Margin="14,18,14,14">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="4,0,0,20">
+          <Image Source="/Assets/usenotch-64.png" Width="30" Height="30" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding ProductName}" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimary}" />
+            <TextBlock Text="{Binding Version, StringFormat=Version {0}}" FontSize="11"
+                       Foreground="{StaticResource TextDim}" />
+          </StackPanel>
+        </StackPanel>
+
+        <TextBlock DockPanel.Dock="Bottom"
+                   Text="Closing keeps UseNotch in the notification area."
+                   FontSize="11"
+                   Foreground="{StaticResource TextDim}"
+                   TextWrapping="Wrap"
+                   Margin="4,12,0,0" />
+
+        <ItemsControl ItemsSource="{Binding Sections}" DockPanel.Dock="Top">
           <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:SettingsSection">
+            <DataTemplate x:DataType="vm:SettingsSectionItem">
               <Button Classes="nav"
-                      Content="{Binding}"
+                      Classes.selected="{Binding IsSelected}"
+                      Content="{Binding Title}"
                       Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).SelectSectionCommand}"
-                      CommandParameter="{Binding}"
+                      CommandParameter="{Binding Section}"
                       HorizontalAlignment="Stretch" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-      </StackPanel>
+      </DockPanel>
     </Border>
 
-    <ScrollViewer Grid.Column="1" Padding="24">
-      <StackPanel Spacing="16">
-        <TextBlock Text="{Binding SelectedSection}" FontSize="20" FontWeight="SemiBold" Foreground="#F2F4F7" />
-        <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}" FontSize="12" Foreground="#93A0B2" TextWrapping="Wrap" />
+    <DockPanel Grid.Column="1">
 
-        <!-- Status and Providers: the same data the non-activating overlay shows, reachable by keyboard. -->
-        <ItemsControl ItemsSource="{Binding Providers}"
-                      IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsStatusOrProviders}}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:ProviderSettingsViewModel">
-              <Border Classes="row" Margin="0,0,0,10">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" Foreground="#E9EEF5" />
-                  <TextBlock Text="{Binding SourceDescription}" Classes="detail" />
-                  <TextBlock Text="{Binding QuotaScope}" Classes="detail" />
-                  <TextBlock Text="{Binding AuthenticationText}" Classes="detail" />
-                  <TextBlock Text="{Binding FreshnessText}" Classes="detail" />
-                  <TextBlock Text="{Binding ActivityText}" Classes="detail" />
-                  <TextBlock Text="{Binding RecoveryAction}" Classes="detail" TextWrapping="Wrap" />
-                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                    <Button Content="{Binding RefreshCommandLabel}" Command="{Binding RefreshNowCommand}" />
-                    <Button Content="Reconnect" Command="{Binding ReconnectCommand}" />
-                    <Button Content="{Binding EnabledLabel}" Command="{Binding ToggleEnabledCommand}" />
+      <!-- One heading, one line saying what the section is for, and the current status underneath. -->
+      <Border DockPanel.Dock="Top"
+              BorderBrush="{StaticResource Divider}"
+              BorderThickness="0,0,0,1"
+              Padding="28,22,28,18">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{Binding CurrentSection.Title}" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{StaticResource TextPrimary}" />
+          <TextBlock Text="{Binding CurrentSection.Description}" Classes="detail" TextWrapping="Wrap" />
+          <TextBlock x:Name="StatusText"
+                     Text="{Binding StatusMessage}"
+                     Classes="detail"
+                     Margin="0,6,0,0"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <ScrollViewer Padding="28,20,44,28" HorizontalScrollBarVisibility="Disabled">
+        <!-- Capped so a long sentence wraps at a readable measure instead of the window width. -->
+        <StackPanel Spacing="26" MaxWidth="720" HorizontalAlignment="Stretch">
+
+          <!-- Status: read-only, what each provider reports. No configuration lives here. -->
+          <StackPanel Spacing="0" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsStatus}}">
+            <ItemsControl ItemsSource="{Binding Providers}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ProviderSettingsViewModel">
+                  <Border Classes="row">
+                    <StackPanel Spacing="10">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding DisplayName}" Classes="rowTitle" />
+                        <TextBlock Grid.Column="1" Text="{Binding AuthenticationText}" Classes="badge" />
+                      </Grid>
+                      <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <TextBlock Text="Quota windows" Classes="fieldLabel" />
+                        <TextBlock Grid.Column="1" Text="{Binding QuotaScope}" Classes="fieldValue" />
+                        <TextBlock Grid.Row="1" Text="Last reading" Classes="fieldLabel" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FreshnessText}" Classes="fieldValue" />
+                        <TextBlock Grid.Row="2" Text="Local activity" Classes="fieldLabel" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActivityText}" Classes="fieldValue" />
+                        <TextBlock Grid.Row="3" Text="Next step" Classes="fieldLabel" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RecoveryAction}" Classes="fieldValue" TextWrapping="Wrap" />
+                      </Grid>
+                      <Button Classes="secondary"
+                              Content="{Binding RefreshCommandLabel}"
+                              Command="{Binding RefreshNowCommand}"
+                              HorizontalAlignment="Left" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <!-- Providers: configuration only. What Status reports is deliberately not repeated here. -->
+          <StackPanel Spacing="0" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsProviders}}">
+            <ItemsControl ItemsSource="{Binding Providers}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ProviderSettingsViewModel">
+                  <Border Classes="row">
+                    <StackPanel Spacing="0">
+                      <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                        <TextBlock Text="{Binding DisplayName}" Classes="rowTitle" />
+                        <Button Grid.Column="1"
+                                Classes="secondary"
+                                Content="{Binding EnabledLabel}"
+                                Command="{Binding ToggleEnabledCommand}" />
+                      </Grid>
+
+                      <Border Classes="field">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <StackPanel>
+                            <TextBlock Text="Credential source" Classes="fieldName" />
+                            <TextBlock Text="{Binding SourceDescription}" Classes="hint" TextWrapping="Wrap" />
+                          </StackPanel>
+                          <Button Grid.Column="1"
+                                  Classes="secondary"
+                                  Content="Reconnect"
+                                  Command="{Binding ReconnectCommand}"
+                                  VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+
+                      <Border Classes="field last">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <StackPanel>
+                            <TextBlock Text="Override the discovered folder" Classes="fieldName" />
+                            <TextBlock Text="Leave empty to keep using the location found automatically."
+                                       Classes="hint" TextWrapping="Wrap" />
+                          </StackPanel>
+                          <TextBox Grid.Column="1"
+                                   Text="{Binding SelectedRoot}"
+                                   Width="260"
+                                   Watermark="Discovered automatically"
+                                   VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <!-- Appearance -->
+          <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAppearance}}">
+            <StackPanel Spacing="0">
+              <TextBlock Text="Placement" Classes="groupHeading" />
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Monitor" Classes="fieldName" />
+                    <TextBlock Text="Empty follows the primary monitor." Classes="hint" />
                   </StackPanel>
-                </StackPanel>
+                  <TextBox Grid.Column="1" Text="{Binding MonitorId}" Width="260"
+                           Watermark="Primary monitor" VerticalAlignment="Center" />
+                </Grid>
               </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Screen edge" Classes="fieldName" />
+                    <TextBlock Text="Which edge the notch is cut into." Classes="hint" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding Edges}" SelectedItem="{Binding Edge}"
+                            Width="160" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Offset" Classes="fieldName" />
+                    <TextBlock Text="Nudge the overlay along that edge, in pixels." Classes="hint" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Text="X" Classes="axis" />
+                    <NumericUpDown Value="{Binding OffsetX}" Minimum="-4000" Maximum="4000" Increment="4" Width="112" />
+                    <TextBlock Text="Y" Classes="axis" />
+                    <NumericUpDown Value="{Binding OffsetY}" Minimum="-4000" Maximum="4000" Increment="4" Width="112" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
 
-        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAppearance}}">
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Placement" Classes="heading" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Monitor" Classes="label" />
-                <TextBox Text="{Binding MonitorId}" Width="240" Watermark="Primary monitor" />
+            <StackPanel Spacing="0">
+              <TextBlock Text="Behaviour" Classes="groupHeading" />
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Show the overlay" Classes="fieldName" />
+                    <TextBlock Text="Off leaves only the tray icon." Classes="hint" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding OverlayVisible}" />
+                </Grid>
+              </Border>
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Keep it pinned open" Classes="fieldName" />
+                    <TextBlock Text="Stays expanded instead of hiding when the pointer leaves." Classes="hint" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding Pinned}" />
+                </Grid>
+              </Border>
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Show over full-screen windows" Classes="fieldName" />
+                    <TextBlock Text="Some full-screen games and players will still cover it." Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding VisibleOverFullScreen}" />
+                </Grid>
+              </Border>
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Reduce motion" Classes="fieldName" />
+                    <TextBlock Text="Removes the expand and collapse animation." Classes="hint" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding ReducedMotion}" />
+                </Grid>
+              </Border>
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Overlay scale" Classes="fieldName" />
+                    <TextBlock Text="Independent of the Windows display scale." Classes="hint" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Slider Value="{Binding UiScale}" Minimum="0.75" Maximum="2.0"
+                            TickFrequency="0.25" IsSnapToTickEnabled="True" Width="200"
+                            VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding UiScale, StringFormat={}{0:0.00}x}" Classes="fieldValue"
+                               MinWidth="44" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+
+          <!-- General -->
+          <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsGeneral}}">
+            <StackPanel Spacing="0">
+              <TextBlock Text="Startup" Classes="groupHeading" />
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Launch when I sign in" Classes="fieldName" />
+                    <TextBlock Text="{Binding LaunchAtLoginStatus}" Classes="hint" />
+                    <TextBlock Text="Opt-in, and it applies to this user account only." Classes="hint" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="secondary" Content="Change"
+                          Command="{Binding ToggleLaunchAtLoginCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="0">
+              <TextBlock Text="Monitoring" Classes="groupHeading" />
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Pause all monitoring" Classes="fieldName" />
+                    <TextBlock Text="Stops provider requests and activity scans. Settings and clearly marked cached readings are kept."
+                               Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="secondary" Content="Pause or resume"
+                          Command="{Binding TogglePauseCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+
+          <!-- Privacy -->
+          <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsPrivacy}}">
+            <StackPanel Spacing="0">
+              <TextBlock Text="Local observation" Classes="groupHeading" />
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Observe local assistant activity" Classes="fieldName" />
+                    <TextBlock Text="Session metadata only. Never conversation content, working directories, or window titles."
+                               Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding ActivityMonitoringEnabled}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="0">
+              <TextBlock Text="Diagnostics" Classes="groupHeading" />
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Write a sanitized diagnostic log" Classes="fieldName" />
+                    <TextBlock Text="Off by default and capped in size. Never contains tokens, response bodies, or account identifiers."
+                               Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding DiagnosticsEnabled}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="0">
+              <TextBlock Text="Stored data" Classes="groupHeading" />
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Clear UseNotch data" Classes="fieldName" />
+                    <TextBlock Text="Removes only the cache and logs this application owns. It never modifies or signs out a provider's own tool."
+                               Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="danger" Content="Clear"
+                          Command="{Binding ClearDataCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+
+          <!-- About -->
+          <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAbout}}">
+            <StackPanel Spacing="0">
+              <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,0,0,18">
+                <Image Source="/Assets/usenotch-64.png" Width="52" Height="52" VerticalAlignment="Top" />
+                <StackPanel Spacing="3" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding ProductName}" FontSize="17" FontWeight="SemiBold"
+                             Foreground="{StaticResource TextPrimary}" />
+                  <TextBlock Text="{Binding Tagline}" Classes="detail" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Version, StringFormat=Version {0}}" Classes="hint" />
+                </StackPanel>
               </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Edge" Classes="label" />
-                <ComboBox ItemsSource="{Binding Edges}" SelectedItem="{Binding Edge}" Width="140" />
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Offset X" Classes="label" />
-                <NumericUpDown Value="{Binding OffsetX}" Minimum="-4000" Maximum="4000" Increment="4" Width="120" />
-                <TextBlock Text="Offset Y" Classes="label" />
-                <NumericUpDown Value="{Binding OffsetY}" Minimum="-4000" Maximum="4000" Increment="4" Width="120" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Presentation" Classes="heading" />
-              <CheckBox Content="Show the overlay" IsChecked="{Binding OverlayVisible}" />
-              <CheckBox Content="Keep the overlay pinned open" IsChecked="{Binding Pinned}" />
-              <CheckBox Content="Keep visible over full-screen windows" IsChecked="{Binding VisibleOverFullScreen}" />
-              <CheckBox Content="Reduce motion" IsChecked="{Binding ReducedMotion}" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="UI scale" Classes="label" />
-                <Slider Value="{Binding UiScale}" Minimum="0.75" Maximum="2.0" TickFrequency="0.25" IsSnapToTickEnabled="True" Width="220" />
-                <TextBlock Text="{Binding UiScale, StringFormat={}{0:0.00}x}" Classes="detail" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-        </StackPanel>
 
-        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsGeneral}}">
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Startup" Classes="heading" />
-              <TextBlock Text="{Binding LaunchAtLoginStatus}" Classes="detail" />
-              <Button Content="Toggle launch at login" Command="{Binding ToggleLaunchAtLoginCommand}" />
-              <TextBlock Text="Launch at login is opt-in and applies to this user account only." Classes="detail" TextWrapping="Wrap" />
+              <Border Classes="field">
+                <Grid ColumnDefinitions="150,*">
+                  <TextBlock Text="Publisher" Classes="fieldLabel" />
+                  <TextBlock Grid.Column="1" Text="{Binding Copyright}" Classes="fieldValue" />
+                </Grid>
+              </Border>
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="150,*">
+                  <TextBlock Text="Data location" Classes="fieldLabel" />
+                  <TextBlock Grid.Column="1" Text="{Binding DataLocation}" Classes="fieldValue" TextWrapping="Wrap" />
+                </Grid>
+              </Border>
             </StackPanel>
-          </Border>
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Monitoring" Classes="heading" />
-              <Button Content="Pause or resume all monitoring" Command="{Binding TogglePauseCommand}" />
-              <TextBlock Text="Pausing stops provider requests and activity scans. It keeps settings and clearly marked cached data." Classes="detail" TextWrapping="Wrap" />
-            </StackPanel>
-          </Border>
-        </StackPanel>
 
-        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsPrivacy}}">
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Local monitoring" Classes="heading" />
-              <CheckBox Content="Observe local assistant activity" IsChecked="{Binding ActivityMonitoringEnabled}" />
-              <TextBlock Text="Activity monitoring reads session metadata only. It never reads conversation content, working directories, or titles." Classes="detail" TextWrapping="Wrap" />
+            <StackPanel Spacing="0">
+              <TextBlock Text="Credentials" Classes="groupHeading" />
+              <TextBlock Text="UseNotch reads OpenAI Codex and Anthropic Claude Code credentials locally and read-only. It never refreshes, stores, or forwards them."
+                         Classes="detail" TextWrapping="Wrap" />
             </StackPanel>
-          </Border>
-          <Border Classes="row">
-            <StackPanel Spacing="8">
-              <TextBlock Text="Diagnostics" Classes="heading" />
-              <CheckBox Content="Write a sanitized diagnostic log" IsChecked="{Binding DiagnosticsEnabled}" />
-              <TextBlock Text="Diagnostics are off by default, are capped in size, and never contain tokens, response bodies, or account identifiers." Classes="detail" TextWrapping="Wrap" />
-              <Button Content="Clear UseNotch data" Command="{Binding ClearDataCommand}" />
-              <TextBlock Text="Clearing removes only the cache and logs this application owns. It never modifies or signs out a provider's own tool." Classes="detail" TextWrapping="Wrap" />
-            </StackPanel>
-          </Border>
-        </StackPanel>
 
-        <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAbout}}">
-          <Border Classes="row">
-            <StackPanel Spacing="6">
-              <TextBlock Text="{Binding ProductName}" Classes="heading" />
-              <TextBlock Text="{Binding Tagline}" Classes="detail" TextWrapping="Wrap" />
-              <TextBlock Text="{Binding Version, StringFormat=Version {0}}" Classes="detail" />
-              <TextBlock Text="{Binding Copyright}" Classes="detail" />
-              <TextBlock Text="{Binding DataLocation}" Classes="detail" TextWrapping="Wrap" />
-              <TextBlock Text="UseNotch reads OpenAI Codex and Anthropic Claude Code credentials locally and read-only. It never refreshes, stores, or forwards them." Classes="detail" TextWrapping="Wrap" />
-              <TextBlock Text="OpenAI, Codex, Anthropic, and Claude are trademarks of their respective owners. UseNotch is an independent tool and is not affiliated with or endorsed by either." Classes="detail" TextWrapping="Wrap" />
+            <StackPanel Spacing="0">
+              <TextBlock Text="Trademarks" Classes="groupHeading" />
+              <TextBlock Text="OpenAI, Codex, Anthropic, and Claude are trademarks of their respective owners. UseNotch is an independent tool and is not affiliated with or endorsed by either."
+                         Classes="detail" TextWrapping="Wrap" />
             </StackPanel>
-          </Border>
-        </StackPanel>
+          </StackPanel>
 
-        <TextBlock Text="Close this window to keep UseNotch in the notification area."
-                   FontSize="12" Foreground="#7F8B9C" />
-      </StackPanel>
-    </ScrollViewer>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
   </Grid>
 
   <Window.Styles>
     <Style Selector="Button.nav">
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="FontSize" Value="13" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#C3CDDB" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
-    <Style Selector="Button.nav:pointerover">
-      <Setter Property="Background" Value="#18202B" />
+    <Style Selector="Button.nav /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="6" />
     </Style>
-    <Style Selector="Border.row">
-      <Setter Property="Background" Value="#151A21" />
-      <Setter Property="BorderBrush" Value="#27303B" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="7" />
-      <Setter Property="Padding" Value="16" />
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
     </Style>
-    <Style Selector="TextBlock.heading">
-      <Setter Property="FontSize" Value="14" />
+    <!-- The open section is stated, not merely implied by where the pointer happens to be. -->
+    <Style Selector="Button.nav.selected">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#E9EEF5" />
+    </Style>
+    <Style Selector="Button.nav.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource RaisedHover}" />
+    </Style>
+    <Style Selector="Button.nav.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource RaisedHover}" />
+    </Style>
+
+    <!-- A card only where one provider must be told apart from the next. -->
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Edge}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="18" />
+      <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <!-- Everything else is an aligned row with a divider, not a box. -->
+    <Style Selector="Border.field">
+      <Setter Property="BorderBrush" Value="{StaticResource Divider}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="0,13" />
+      <Setter Property="MinHeight" Value="52" />
+    </Style>
+    <Style Selector="Border.field.last">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <!-- The switch reads as on or off from its own state; a repeated On/Off label adds nothing. -->
+    <Style Selector="ToggleSwitch">
+      <Setter Property="OnContent" Value="" />
+      <Setter Property="OffContent" Value="" />
+    </Style>
+    <!-- On and off should differ by more than a knob position at a glance. -->
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
+      <Setter Property="Background" Value="{StaticResource Accent}" />
+    </Style>
+    <Style Selector="TextBlock.groupHeading">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+    <Style Selector="TextBlock.rowTitle">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.fieldName">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+      <Setter Property="Margin" Value="0,0,12,6" />
+    </Style>
+    <Style Selector="TextBlock.fieldValue">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+    <Style Selector="TextBlock.axis">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+      <Setter Property="Margin" Value="0,2,16,0" />
     </Style>
     <Style Selector="TextBlock.detail">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#93A0B2" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
     </Style>
-    <Style Selector="TextBlock.label">
+    <Style Selector="TextBlock.badge">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#C3CDDB" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
       <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="MinWidth" Value="70" />
+    </Style>
+
+    <Style Selector="Button.secondary">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="14,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="{StaticResource RaisedHover}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Edge}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="14,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Danger}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Danger}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
   </Window.Styles>
 </Window>

@@ -9,8 +9,13 @@ namespace UseNotch.App.ViewModels;
 /// </summary>
 public static class SectionConverters
 {
-    public static IValueConverter IsStatusOrProviders { get; } =
-        new SectionConverter(SettingsSection.Status, SettingsSection.Providers);
+    /// <summary>
+    /// Status reports what each provider is doing; Providers configures them. They used to render the
+    /// same content, which made one of the two navigation entries pointless.
+    /// </summary>
+    public static IValueConverter IsStatus { get; } = new SectionConverter(SettingsSection.Status);
+
+    public static IValueConverter IsProviders { get; } = new SectionConverter(SettingsSection.Providers);
 
     public static IValueConverter IsAppearance { get; } = new SectionConverter(SettingsSection.Appearance);
 

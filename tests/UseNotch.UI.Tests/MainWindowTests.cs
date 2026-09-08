@@ -95,6 +95,8 @@ internal sealed class FakeSettingsRuntime : ISettingsRuntime
         return ["cache"];
     }
 
+    public string DescribeDataLocation() => @"C:\fixture\UseNotch";
+
     public void ApplyOverlaySettings(OverlaySettings settings) => AppliedOverlay = settings;
 }
 
@@ -152,7 +154,29 @@ public class MainWindowTests
 
         Assert.Equal(
             [SettingsSection.Status, SettingsSection.Providers, SettingsSection.Appearance, SettingsSection.General, SettingsSection.Privacy, SettingsSection.About],
-            viewModel.Sections);
+            viewModel.Sections.Select(item => item.Section));
+
+        // Each entry names itself and says what it is for, so the heading is not just an enum name.
+        Assert.All(viewModel.Sections, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(item.Title));
+            Assert.False(string.IsNullOrWhiteSpace(item.Description));
+        });
+    }
+
+    [AvaloniaFact]
+    public void Exactly_one_navigation_section_is_marked_selected()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.Equal(SettingsSection.Status, Assert.Single(viewModel.Sections, item => item.IsSelected).Section);
+        Assert.Equal(SettingsSection.Status, viewModel.CurrentSection.Section);
+
+        viewModel.SelectSectionCommand.Execute(SettingsSection.Privacy);
+
+        // The previous entry must clear, otherwise the navigation shows two open sections at once.
+        Assert.Equal(SettingsSection.Privacy, Assert.Single(viewModel.Sections, item => item.IsSelected).Section);
+        Assert.Equal("Privacy", viewModel.CurrentSection.Title);
     }
 
     [AvaloniaFact]

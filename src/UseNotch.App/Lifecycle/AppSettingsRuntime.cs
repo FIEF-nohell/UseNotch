@@ -85,6 +85,8 @@ public sealed class AppSettingsRuntime(
 
     public IReadOnlyList<string> ClearOwnedData() => ApplicationPaths.ClearOwnedData();
 
+    public string DescribeDataLocation() => ApplicationPaths.Root;
+
     public void ApplyOverlaySettings(OverlaySettings settings) => applyOverlay?.Invoke(settings);
 
     private static string Source(ProviderId provider) => provider == ProviderId.OpenAi ? "codex:default" : "claude:default";

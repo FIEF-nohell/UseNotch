@@ -198,6 +198,12 @@ def main() -> None:
         handle.write(build_svg())
     print("wrote {}".format(svg))
 
+    # The settings window shows the mark in its header. Avalonia decodes PNG reliably; .ico is for
+    # Windows shell surfaces only, so the application carries both.
+    header = os.path.join(assets, "usenotch-64.png")
+    draw_icon(64).save(header)
+    print("wrote {}".format(header))
+
     for name, size in (("usenotch-512.png", 512), ("usenotch-128.png", 128)):
         target = os.path.join(root, "docs", "brand", name)
         os.makedirs(os.path.dirname(target), exist_ok=True)

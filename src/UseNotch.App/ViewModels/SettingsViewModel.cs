@@ -11,6 +11,25 @@ namespace UseNotch.App.ViewModels;
 public enum SettingsSection { Status, Providers, Appearance, General, Privacy, About }
 
 /// <summary>
+/// One entry in the settings navigation. Selection state lives here rather than being derived in the
+/// view, so the markup binds a plain boolean instead of comparing an enum against the current section
+/// in several places.
+/// </summary>
+public partial class SettingsSectionItem(SettingsSection section, string title, string description)
+    : ObservableObject
+{
+    public SettingsSection Section { get; } = section;
+
+    public string Title { get; } = title;
+
+    /// <summary>One line under the section heading saying what the section is for.</summary>
+    public string Description { get; } = description;
+
+    [ObservableProperty]
+    private bool _isSelected;
+}
+
+/// <summary>
 /// Everything the settings window needs from the running application. Keeping it behind an interface
 /// lets the settings behavior be tested without a tray, an overlay, or a provider account.
 /// </summary>
@@ -29,6 +48,9 @@ public interface ISettingsRuntime
     Task ReconnectAsync(ProviderId provider);
 
     IReadOnlyList<string> ClearOwnedData();
+
+    /// <summary>Where this application keeps its own settings, cache, and logs.</summary>
+    string DescribeDataLocation();
 
     void ApplyOverlaySettings(OverlaySettings settings);
 }
@@ -235,10 +257,20 @@ public partial class SettingsViewModel : ObservableObject
         var definitions = (registry ?? new ProviderRegistry()).Definitions;
         Providers = new ObservableCollection<ProviderSettingsViewModel>(
             definitions.Select(definition => new ProviderSettingsViewModel(definition.Id, definition.DisplayName, runtime, _clock, PersistAsync)));
-        Sections = new ObservableCollection<SettingsSection>(Enum.GetValues<SettingsSection>());
+        Sections = new ObservableCollection<SettingsSectionItem>(
+        [
+            new(SettingsSection.Status, "Status", "What each provider is reporting right now."),
+            new(SettingsSection.Providers, "Providers", "Which providers are monitored and where their credentials are read from."),
+            new(SettingsSection.Appearance, "Appearance", "Where the overlay sits and how it behaves on screen."),
+            new(SettingsSection.General, "General", "Launching with Windows, and pausing all monitoring."),
+            new(SettingsSection.Privacy, "Privacy", "What is observed locally, what is logged, and how to clear it."),
+            new(SettingsSection.About, "About", "Version, data location, and what this application does with credentials."),
+        ]);
+        UpdateSectionSelection();
+        DataLocation = runtime.DescribeDataLocation();
     }
 
-    public ObservableCollection<SettingsSection> Sections { get; }
+    public ObservableCollection<SettingsSectionItem> Sections { get; }
 
     public ObservableCollection<ProviderSettingsViewModel> Providers { get; }
 
@@ -264,6 +296,22 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private SettingsSection _selectedSection = SettingsSection.Status;
+
+    partial void OnSelectedSectionChanged(SettingsSection value) => UpdateSectionSelection();
+
+    /// <summary>The heading and one-line description for whichever section is showing.</summary>
+    public SettingsSectionItem CurrentSection =>
+        Sections.First(item => item.Section == SelectedSection);
+
+    private void UpdateSectionSelection()
+    {
+        foreach (var item in Sections)
+        {
+            item.IsSelected = item.Section == SelectedSection;
+        }
+
+        OnPropertyChanged(nameof(CurrentSection));
+    }
 
     [ObservableProperty]
     private string? _monitorId;
@@ -310,6 +358,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = "Settings not loaded yet";
 
+    /// <summary>
+    /// Filled from the runtime rather than left blank. This row was previously declared and never
+    /// assigned, so About showed a label with nothing beside it.
+    /// </summary>
     [ObservableProperty]
     private string _dataLocation = string.Empty;
 
