@@ -313,9 +313,23 @@ public sealed class CodexUsageProviderTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_root))
+        // Windows can still hold a handle briefly after the last writer closes it, so a temporary
+        // directory that refuses to delete must not fail an otherwise passing test.
+        for (var attempt = 0; attempt < 5 && Directory.Exists(_root); attempt++)
         {
-            Directory.Delete(_root, true);
+            try
+            {
+                Directory.Delete(_root, true);
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(50);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
         }
     }
 
@@ -468,13 +482,21 @@ public sealed class ClaudeUsageProviderTests : IDisposable
         Directory.CreateDirectory(_root);
         var path = Path.Combine(_root, ".credentials.json");
         await File.WriteAllTextAsync(path, "{\"claudeAiOauth\":{\"acce");
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(20);
-            await File.WriteAllTextAsync(path, "{\"claudeAiOauth\":{\"accessToken\":\"complete.token\",\"expiresAt\":1900000000000}}");
-        });
 
-        var credential = await new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None);
+        // The completing write is started on this thread and awaited, never handed to a background task
+        // that nothing waits for. A fire-and-forget writer made this test fail two ways on a loaded
+        // runner: it could be starved past the reader's retry window, and it could still be writing when
+        // Dispose deleted the directory underneath it.
+        //
+        // ReadAsync only returns to this line once its first attempt has already failed and it is
+        // sitting in the retry delay, so the completed file lands inside that window. Should the write
+        // instead land before or during the first read, that attempt either succeeds outright or tears
+        // and is retried. Every interleaving ends with the same credential, because the property under
+        // test is that a partial write does not become a permanent failure.
+        var read = new ClaudeCredentialReader().ReadAsync(new ClaudeSource(_root, "test"), CancellationToken.None);
+        await File.WriteAllTextAsync(path, "{\"claudeAiOauth\":{\"accessToken\":\"complete.token\",\"expiresAt\":1900000000000}}");
+
+        var credential = await read;
 
         Assert.Equal("complete.token", credential.AccessToken);
     }
