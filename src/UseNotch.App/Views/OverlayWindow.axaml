@@ -30,7 +30,27 @@
                            SurfaceBrush="#FF000000"
                            InnerRadius="34"
                            EdgeRadius="44"
-                           Padding="0,16">
+                           Padding="0,16"
+                           Opacity="0">
+      <!--
+        The notch slides in from behind the screen edge rather than appearing at full size. The
+        transitions live here and the values are set from code, so a reduced-motion preference can place
+        the notch directly at its resting position instead of animating to it.
+      -->
+      <controls:NotchSurface.RenderTransform>
+        <TranslateTransform X="120">
+          <TranslateTransform.Transitions>
+            <Transitions>
+              <DoubleTransition Property="X" Duration="0:0:0.20" Easing="CubicEaseOut" />
+            </Transitions>
+          </TranslateTransform.Transitions>
+        </TranslateTransform>
+      </controls:NotchSurface.RenderTransform>
+      <controls:NotchSurface.Transitions>
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" Easing="CubicEaseOut" />
+        </Transitions>
+      </controls:NotchSurface.Transitions>
       <StackPanel Spacing="16">
         <Button x:Name="AnthropicCell"
                 Classes="providerItem"
@@ -40,8 +60,14 @@
             <Panel x:Name="AnthropicRing" Width="56" Height="56">
               <controls:QuotaRing Width="56" Height="56"
                                   StrokeThickness="4"
-                                  Fraction="{Binding Anthropic.RingFraction}"
-                                  ArcBrush="{Binding Anthropic.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
+                                  Fraction="{Binding Anthropic.RingFraction}">
+                <controls:QuotaRing.ArcBrush>
+                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
+                    <Binding Path="Anthropic.Severity" />
+                    <Binding Path="Anthropic.Provider" />
+                  </MultiBinding>
+                </controls:QuotaRing.ArcBrush>
+              </controls:QuotaRing>
               <Path Data="{x:Static vm:ProviderGlyphs.Anthropic}"
                     Fill="#FFF2F4F7"
                     Width="24" Height="24"
@@ -61,8 +87,14 @@
             <Panel x:Name="OpenAiRing" Width="56" Height="56">
               <controls:QuotaRing Width="56" Height="56"
                                   StrokeThickness="4"
-                                  Fraction="{Binding OpenAi.RingFraction}"
-                                  ArcBrush="{Binding OpenAi.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
+                                  Fraction="{Binding OpenAi.RingFraction}">
+                <controls:QuotaRing.ArcBrush>
+                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
+                    <Binding Path="OpenAi.Severity" />
+                    <Binding Path="OpenAi.Provider" />
+                  </MultiBinding>
+                </controls:QuotaRing.ArcBrush>
+              </controls:QuotaRing>
               <Path Data="{x:Static vm:ProviderGlyphs.OpenAi}"
                     Fill="#FFF2F4F7"
                     Width="24" Height="24"

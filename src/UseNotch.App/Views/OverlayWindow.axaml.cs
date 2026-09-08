@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using UseNotch.App.ViewModels;
 using UseNotch.Application;
@@ -24,10 +25,19 @@ public partial class OverlayWindow : Window
     /// </summary>
     private const double EdgeTriggerWidth = 28;
 
+    /// <summary>How far off the docked edge the notch starts before it slides into place.</summary>
+    private const double NotchEntranceOffset = 120;
+
     private readonly OverlayViewModel _viewModel;
     private readonly OverlayHoverDelays _delays;
     private readonly DispatcherTimer _hoverTimer;
     private OverlayTrigger? _pendingHoverTrigger;
+    /// <summary>
+    /// The notch's slide transform. A name on a transform does not produce a generated field, because
+    /// the transform is not a control in the visual tree, so it is resolved once here instead.
+    /// </summary>
+    private readonly TranslateTransform? _notchSlide;
+
     private bool _cursorInside;
     private bool _allowClose;
 
@@ -44,6 +54,7 @@ public partial class OverlayWindow : Window
         DataContext = _viewModel;
         _viewModel.LoadDevelopmentScenario();
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        _notchSlide = NotchBar.RenderTransform as TranslateTransform;
         _hoverTimer = new DispatcherTimer { Interval = _delays.Expand };
         _hoverTimer.Tick += OnHoverTimerTick;
         ScalingChanged += (_, _) => InteractiveRegionsChanged?.Invoke(this, EventArgs.Empty);
@@ -218,6 +229,56 @@ public partial class OverlayWindow : Window
         {
             RefreshRegions();
         }
+
+        if (e.PropertyName is nameof(OverlayViewModel.ShowsProviderCells))
+        {
+            AnimateNotchEntrance();
+        }
+    }
+
+    /// <summary>
+    /// Slides the notch in from behind the screen edge as it appears.
+    /// <para>
+    /// The resting values have to be applied in a later dispatcher pass. Setting them in the same pass
+    /// that made the notch visible would leave the transition nothing to animate from, and the notch
+    /// would simply pop into place.
+    /// </para>
+    /// </summary>
+    private void AnimateNotchEntrance()
+    {
+        if (_notchSlide is null)
+        {
+            NotchBar.Opacity = _viewModel.ShowsProviderCells ? 1 : 0;
+            return;
+        }
+
+        if (!_viewModel.ShowsProviderCells)
+        {
+            // Hidden again: park it off the edge so the next entrance starts from outside the screen.
+            NotchBar.Opacity = 0;
+            _notchSlide.X = NotchEntranceOffset;
+            return;
+        }
+
+        if (_viewModel.ReducedMotion)
+        {
+            NotchBar.Opacity = 1;
+            _notchSlide.X = 0;
+            return;
+        }
+
+        NotchBar.Opacity = 0;
+        _notchSlide.X = NotchEntranceOffset;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (_viewModel.ShowsProviderCells)
+                {
+                    NotchBar.Opacity = 1;
+                    _notchSlide.X = 0;
+                }
+            },
+            DispatcherPriority.Background);
     }
 
     private void RefreshRegions()

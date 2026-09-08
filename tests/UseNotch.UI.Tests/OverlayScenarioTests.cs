@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -326,6 +327,38 @@ public class OverlayScenarioTests
             window.CloseForShutdown();
         }
     }
+
+    // The ring answers "which provider", the bars answer "how close to the limit". Keeping that split
+    // pinned matters because the ring's rule has changed twice; a percentage must never recolour a ring.
+    [AvaloniaTheory]
+    [InlineData(QuotaSeverity.Normal)]
+    [InlineData(QuotaSeverity.Caution)]
+    [InlineData(QuotaSeverity.Exhausted)]
+    public void A_ring_keeps_its_provider_accent_at_every_reading(QuotaSeverity severity)
+    {
+        Assert.Same(
+            SeverityConverters.AccentFor(ProviderId.Anthropic),
+            SeverityConverters.ToRingBrush.Convert([severity, ProviderId.Anthropic], typeof(IBrush), null, CultureInfo.InvariantCulture));
+
+        Assert.Same(
+            SeverityConverters.AccentFor(ProviderId.OpenAi),
+            SeverityConverters.ToRingBrush.Convert([severity, ProviderId.OpenAi], typeof(IBrush), null, CultureInfo.InvariantCulture));
+    }
+
+    [AvaloniaFact]
+    public void A_ring_without_a_reading_drops_its_accent()
+    {
+        // Not a percentage, so the accent is not the honest thing to show.
+        Assert.Same(
+            SeverityConverters.UnavailableBrush,
+            SeverityConverters.ToRingBrush.Convert([QuotaSeverity.Unavailable, ProviderId.Anthropic], typeof(IBrush), null, CultureInfo.InvariantCulture));
+    }
+
+    [AvaloniaFact]
+    public void The_two_provider_accents_are_distinct()
+        => Assert.NotEqual(
+            ((ISolidColorBrush)SeverityConverters.AccentFor(ProviderId.OpenAi)).Color,
+            ((ISolidColorBrush)SeverityConverters.AccentFor(ProviderId.Anthropic)).Color);
 
     [AvaloniaFact]
     public void Severity_brushes_are_distinct_so_colour_is_never_the_only_difference()
