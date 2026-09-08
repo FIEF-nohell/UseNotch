@@ -111,11 +111,14 @@ public class PackagingTests
 
         Assert.DoesNotContain("pull_request", release, StringComparison.Ordinal);
         Assert.Contains("permissions:\n  contents: read", release.ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        // Publishing was authorized on 2026-09-08, so a tag produces a visible prerelease. It must stay
-        // a prerelease while the artifact is unsigned and M12's install matrix has not been run: a full
-        // release would present an unverified build as a verified one.
-        Assert.Contains("--prerelease", release, StringComparison.Ordinal);
+        // A tag must produce a discoverable release. Neither flag below may come back: a draft is
+        // visible only to accounts with push access, and if every release is a prerelease the
+        // repository has no latest release, so GitHub hides the Releases panel from the sidebar and
+        // answers /releases/latest with 404. Both leave the artifact effectively undownloadable.
+        Assert.Contains("--latest", release, StringComparison.Ordinal);
         Assert.DoesNotContain("--draft", release, StringComparison.Ordinal);
+        Assert.DoesNotContain("--prerelease", release, StringComparison.Ordinal);
+        // Discoverable is not the same as verified. The notes carry the limitations instead.
         Assert.Contains("not signed", release, StringComparison.Ordinal);
     }
 

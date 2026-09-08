@@ -3,13 +3,15 @@ name: Release
 # Runs only for a tag the repository owner pushes deliberately. It is never triggered by a pull
 # request, so a fork can never reach a signing credential or publish an artifact.
 #
-# The owner authorized publishing on 2026-09-08, so a tag now produces a visible prerelease rather than
-# an invisible draft. A draft is only reachable by accounts with push access, which made the artifact
-# undownloadable in practice.
+# The owner authorized publishing on 2026-09-08, so a tag produces a real, visible release.
 #
-# Prerelease, not a full release: the MSI is unsigned and the install matrix has not been run. That
-# status is stated in the notes rather than hidden by keeping the release invisible. Promoting a build
-# to a full release stays a separate, deliberate decision.
+# It must be neither a draft nor a prerelease. A draft is reachable only by accounts with push access.
+# A prerelease is worse than it looks: if every release is a prerelease the repository has no "latest"
+# release at all, so GitHub answers /releases/latest with 404 and hides the Releases panel from the
+# repository sidebar entirely. Both settings made the artifact undiscoverable.
+#
+# The build's real limitations belong in the release notes, where people read them, not in a flag that
+# hides the download.
 
 on:
   push:
@@ -63,7 +65,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish prerelease
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,7 +80,7 @@ jobs:
           Verified for this build: locked restore, a zero-warning Release build, the full test
           suite, formatting, and the installer structure check.
 
-          Not yet verified, which is why this is a prerelease:
+          Not yet verified, and worth knowing before you install:
 
           - The artifact is not signed, so SmartScreen will warn on install. Signing is part of
             release hardening and has not been done.
@@ -89,6 +91,6 @@ jobs:
           Install it only if you are comfortable with that.
           "@
           gh release create "${{ github.ref_name }}" (Get-Item artifacts/installer/*.msi).FullName `
-            --prerelease `
+            --latest `
             --title "UseNotch ${{ github.ref_name }}" `
             --notes $notes
