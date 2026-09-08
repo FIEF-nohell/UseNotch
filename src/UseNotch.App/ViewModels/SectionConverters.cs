@@ -19,6 +19,8 @@ public static class SectionConverters
 
     public static IValueConverter IsAppearance { get; } = new SectionConverter(SettingsSection.Appearance);
 
+    public static IValueConverter IsAlerts { get; } = new SectionConverter(SettingsSection.Alerts);
+
     public static IValueConverter IsGeneral { get; } = new SectionConverter(SettingsSection.General);
 
     public static IValueConverter IsPrivacy { get; } = new SectionConverter(SettingsSection.Privacy);

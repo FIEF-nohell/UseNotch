@@ -33,15 +33,33 @@ public sealed record PrivacySettings(bool ActivityMonitoringEnabled, bool Diagno
     public static PrivacySettings Default { get; } = new(true, false);
 }
 
+/// <summary>
+/// The user-configurable warning/critical percentages that drive severity and the in-app crossing
+/// notice. Stored as whole percentages (0-100), matching how the settings UI presents them, and
+/// converted to fractions only where <see cref="SeverityThresholds"/> needs them.
+/// </summary>
+public sealed record AlertThresholds(double WarningPercent, double CriticalPercent)
+{
+    public const double MinimumPercent = 1;
+    public const double MaximumPercent = 99;
+
+    // Reproduces today's fixed 50%/80% bands exactly, so upgrading to schema 2 changes nothing until
+    // the user opens Settings and chooses different values.
+    public static AlertThresholds Default { get; } = new(50, 80);
+
+    public SeverityThresholds ToSeverityThresholds() => new(WarningPercent / 100.0, CriticalPercent / 100.0);
+}
+
 public sealed record UseNotchSettings(
     int SchemaVersion,
     ProviderSettings OpenAi,
     ProviderSettings Anthropic,
     OverlaySettings Overlay,
     PrivacySettings Privacy,
-    bool LaunchAtLogin)
+    bool LaunchAtLogin,
+    AlertThresholds Alerts)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public static UseNotchSettings Default { get; } = new(
         CurrentSchemaVersion,
@@ -49,7 +67,8 @@ public sealed record UseNotchSettings(
         ProviderSettings.Default,
         OverlaySettings.Default,
         PrivacySettings.Default,
-        false);
+        false,
+        AlertThresholds.Default);
 
     public ProviderSettings For(ProviderId provider) => provider == ProviderId.OpenAi ? OpenAi : Anthropic;
 
@@ -105,7 +124,8 @@ public static class SettingsValidator
         NormalizeProvider(settings.Anthropic),
         NormalizeOverlay(settings.Overlay),
         settings.Privacy ?? PrivacySettings.Default,
-        settings.LaunchAtLogin);
+        settings.LaunchAtLogin,
+        NormalizeAlerts(settings.Alerts));
 
     private static ProviderSettings NormalizeProvider(ProviderSettings? provider)
     {
@@ -159,5 +179,27 @@ public static class SettingsValidator
             OffsetY = Math.Clamp(overlay.OffsetY, -OverlaySettings.MaximumOffset, OverlaySettings.MaximumOffset),
             UiScale = scale,
         };
+    }
+
+    /// <summary>
+    /// Clamps both percentages into range, then falls back to the default pair entirely if warning is
+    /// not strictly below critical after clamping. Swapping the two would silently change which value
+    /// means what, so an inverted or equal pair is treated as unusable rather than corrected in place.
+    /// </summary>
+    private static AlertThresholds NormalizeAlerts(AlertThresholds? alerts)
+    {
+        if (alerts is null)
+        {
+            return AlertThresholds.Default;
+        }
+
+        if (!double.IsFinite(alerts.WarningPercent) || !double.IsFinite(alerts.CriticalPercent))
+        {
+            return AlertThresholds.Default;
+        }
+
+        var warning = Math.Clamp(alerts.WarningPercent, AlertThresholds.MinimumPercent, AlertThresholds.MaximumPercent);
+        var critical = Math.Clamp(alerts.CriticalPercent, AlertThresholds.MinimumPercent, AlertThresholds.MaximumPercent);
+        return warning < critical ? new AlertThresholds(warning, critical) : AlertThresholds.Default;
     }
 }

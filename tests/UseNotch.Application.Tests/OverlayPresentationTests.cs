@@ -244,4 +244,91 @@ public class QuotaDisplayTests
         Assert.Equal("-", display.ValueText);
         Assert.Contains("no reading", display.AutomationName, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData(0.29, QuotaSeverity.Normal)]
+    [InlineData(0.3, QuotaSeverity.Caution)]
+    [InlineData(0.59, QuotaSeverity.Caution)]
+    [InlineData(0.6, QuotaSeverity.Exhausted)]
+    public void Custom_thresholds_change_severity_at_the_configured_boundary(double used, QuotaSeverity expected)
+    {
+        var thresholds = new SeverityThresholds(0.3, 0.6);
+
+        var display = QuotaDisplay.From("OpenAI / Codex", State((decimal)used), Now, thresholds);
+
+        Assert.Equal(expected, display.Severity);
+    }
+
+    [Theory]
+    [InlineData(0.0, QuotaSeverity.Normal)]
+    [InlineData(0.49, QuotaSeverity.Normal)]
+    [InlineData(0.5, QuotaSeverity.Caution)]
+    [InlineData(0.79, QuotaSeverity.Caution)]
+    [InlineData(0.8, QuotaSeverity.Exhausted)]
+    public void Default_thresholds_behave_exactly_as_before_when_passed_explicitly(double used, QuotaSeverity expected)
+    {
+        var display = QuotaDisplay.From("OpenAI / Codex", State((decimal)used), Now, SeverityThresholds.Default);
+
+        Assert.Equal(expected, display.Severity);
+    }
+}
+
+public class SeverityCrossingTrackerTests
+{
+    [Fact]
+    public void Crossing_into_caution_then_critical_fires_exactly_two_notices()
+    {
+        var tracker = new SeverityCrossingTracker();
+
+        var normal = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Normal);
+        var caution = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+        var repeatedCaution = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+        var exhausted = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Exhausted);
+
+        Assert.Null(normal);
+        Assert.Equal(new SeverityCrossing(ProviderId.OpenAi, QuotaSeverity.Caution), caution);
+        Assert.Null(repeatedCaution);
+        Assert.Equal(new SeverityCrossing(ProviderId.OpenAi, QuotaSeverity.Exhausted), exhausted);
+    }
+
+    [Fact]
+    public void Dropping_back_below_warning_and_crossing_again_fires_a_third_notice()
+    {
+        var tracker = new SeverityCrossingTracker();
+        tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+        tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Exhausted);
+
+        var afterDrop = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Normal);
+        var thirdCrossing = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+
+        Assert.Null(afterDrop);
+        Assert.Equal(new SeverityCrossing(ProviderId.OpenAi, QuotaSeverity.Caution), thirdCrossing);
+    }
+
+    [Fact]
+    public void An_unavailable_or_none_reading_neither_fires_nor_resets_the_arm_state()
+    {
+        var tracker = new SeverityCrossingTracker();
+        tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+
+        var unavailable = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Unavailable);
+        var none = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.None);
+        var repeated = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+
+        Assert.Null(unavailable);
+        Assert.Null(none);
+        Assert.Null(repeated);
+    }
+
+    [Fact]
+    public void Two_providers_are_tracked_independently()
+    {
+        var tracker = new SeverityCrossingTracker();
+
+        var openAi = tracker.Apply(ProviderId.OpenAi, QuotaSeverity.Caution);
+        var anthropic = tracker.Apply(ProviderId.Anthropic, QuotaSeverity.Caution);
+
+        Assert.Equal(new SeverityCrossing(ProviderId.OpenAi, QuotaSeverity.Caution), openAi);
+        Assert.Equal(new SeverityCrossing(ProviderId.Anthropic, QuotaSeverity.Caution), anthropic);
+    }
 }

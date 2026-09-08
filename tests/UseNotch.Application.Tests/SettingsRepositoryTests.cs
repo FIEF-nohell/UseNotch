@@ -147,6 +147,55 @@ public sealed class SettingsRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task A_schema_1_document_migrates_to_schema_2_with_default_alert_thresholds()
+    {
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(
+            Path.Combine(_root, JsonSettingsRepository.FileName),
+            """{"SchemaVersion":1,"OpenAi":{"Enabled":true,"SelectedRoot":null},"Anthropic":{"Enabled":true,"SelectedRoot":null},"Overlay":{"Edge":"Right","OffsetX":0,"OffsetY":0,"Pinned":false,"Visible":true,"UiScale":1.0,"ReducedMotion":false,"VisibleOverFullScreen":false},"Privacy":{"ActivityMonitoringEnabled":true,"DiagnosticsEnabled":false},"LaunchAtLogin":false}""");
+
+        var loaded = await CreateRepository().LoadAsync(CancellationToken.None);
+
+        Assert.Equal(SettingsLoadOutcome.Migrated, loaded.Outcome);
+        Assert.Equal(UseNotchSettings.CurrentSchemaVersion, loaded.Settings.SchemaVersion);
+        Assert.Equal(AlertThresholds.Default, loaded.Settings.Alerts);
+    }
+
+    [Theory]
+    [InlineData(80, 50)]
+    [InlineData(60, 60)]
+    public void An_inverted_or_equal_threshold_pair_normalizes_to_the_default(double warning, double critical)
+    {
+        var normalized = SettingsValidator.Normalize(UseNotchSettings.Default with { Alerts = new AlertThresholds(warning, critical) });
+
+        Assert.Equal(AlertThresholds.Default, normalized.Alerts);
+    }
+
+    [Theory]
+    [InlineData(0, 200, AlertThresholds.MinimumPercent, AlertThresholds.MaximumPercent)]
+    [InlineData(double.NaN, double.NaN, 50, 80)]
+    public void An_out_of_range_threshold_pair_is_clamped(double warning, double critical, double expectedWarning, double expectedCritical)
+    {
+        var normalized = SettingsValidator.Normalize(UseNotchSettings.Default with { Alerts = new AlertThresholds(warning, critical) });
+
+        Assert.Equal(expectedWarning, normalized.Alerts.WarningPercent);
+        Assert.Equal(expectedCritical, normalized.Alerts.CriticalPercent);
+    }
+
+    [Fact]
+    public async Task A_valid_custom_threshold_pair_round_trips_unchanged()
+    {
+        var repository = CreateRepository();
+        var settings = UseNotchSettings.Default with { Alerts = new AlertThresholds(30, 70) };
+
+        await repository.SaveAsync(settings, CancellationToken.None);
+        var loaded = await repository.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(30, loaded.Settings.Alerts.WarningPercent);
+        Assert.Equal(70, loaded.Settings.Alerts.CriticalPercent);
+    }
+
+    [Fact]
     public async Task Enum_values_are_stored_by_name_so_the_document_stays_readable_across_versions()
     {
         var repository = CreateRepository();

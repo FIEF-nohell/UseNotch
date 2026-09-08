@@ -85,6 +85,66 @@ public sealed record OverlayHoverDelays(TimeSpan Expand, TimeSpan Collapse)
 public enum QuotaSeverity { None, Normal, Caution, Exhausted, Unavailable }
 
 /// <summary>
+/// The fractions (0-1) at which a reading turns from normal to caution and from caution to exhausted.
+/// Injectable so the user's configured alert thresholds drive the same severity computation the overlay
+/// has always used, without duplicating the banding logic anywhere.
+/// </summary>
+public sealed record SeverityThresholds(double Warning, double Critical)
+{
+    public static SeverityThresholds Default { get; } = new(0.5, 0.8);
+}
+
+/// <summary>The one-time, session-local event of a provider's reading crossing into a worse severity band.</summary>
+public sealed record SeverityCrossing(ProviderId Provider, QuotaSeverity Severity);
+
+/// <summary>
+/// Watches each provider's severity and reports the moment it first worsens into <see cref="QuotaSeverity.Caution"/>
+/// or <see cref="QuotaSeverity.Exhausted"/> since the tracker was created (or since it last returned to
+/// <see cref="QuotaSeverity.Normal"/>). Dropping to normal re-arms both bands, so a provider that
+/// recovers and later worsens again is reported a second time.
+/// </summary>
+public sealed class SeverityCrossingTracker
+{
+    private readonly Dictionary<ProviderId, QuotaSeverity> _highestNotified = [];
+
+    /// <summary>
+    /// Records the current severity for a provider and returns the crossing it produced, if any.
+    /// <see cref="QuotaSeverity.Unavailable"/> and <see cref="QuotaSeverity.None"/> readings are ignored
+    /// entirely: they neither fire a notice nor reset the arm state, because they say nothing about
+    /// where the usage actually stands.
+    /// </summary>
+    public SeverityCrossing? Apply(ProviderId provider, QuotaSeverity severity)
+    {
+        if (severity is QuotaSeverity.None or QuotaSeverity.Unavailable)
+        {
+            return null;
+        }
+
+        if (severity == QuotaSeverity.Normal)
+        {
+            _highestNotified.Remove(provider);
+            return null;
+        }
+
+        var highest = _highestNotified.GetValueOrDefault(provider, QuotaSeverity.Normal);
+        if (Rank(severity) <= Rank(highest))
+        {
+            return null;
+        }
+
+        _highestNotified[provider] = severity;
+        return new SeverityCrossing(provider, severity);
+    }
+
+    private static int Rank(QuotaSeverity severity) => severity switch
+    {
+        QuotaSeverity.Caution => 1,
+        QuotaSeverity.Exhausted => 2,
+        _ => 0,
+    };
+}
+
+/// <summary>
 /// The presentation facts for one quota reading. Severity is deliberately separate from provider
 /// identity, so a provider's colour never doubles as a warning and a warning never hides the provider.
 /// </summary>
@@ -104,6 +164,9 @@ public sealed record QuotaDisplay(
     public const double ExhaustedThreshold = 0.8;
 
     public static QuotaDisplay From(string providerName, ProviderRuntimeState? state, DateTimeOffset now)
+        => From(providerName, state, now, SeverityThresholds.Default);
+
+    public static QuotaDisplay From(string providerName, ProviderRuntimeState? state, DateTimeOffset now, SeverityThresholds thresholds)
     {
         if (state is null)
         {
@@ -135,9 +198,9 @@ public sealed record QuotaDisplay(
         var freshness = DescribeFreshness(state, now);
         var severity = state.Status.Freshness == DataFreshness.Expired
             ? QuotaSeverity.Unavailable
-            : overLimit || used >= (decimal)ExhaustedThreshold
+            : overLimit || used >= (decimal)thresholds.Critical
                 ? QuotaSeverity.Exhausted
-                : used >= (decimal)CautionThreshold
+                : used >= (decimal)thresholds.Warning
                     ? QuotaSeverity.Caution
                     : QuotaSeverity.Normal;
         return new QuotaDisplay(

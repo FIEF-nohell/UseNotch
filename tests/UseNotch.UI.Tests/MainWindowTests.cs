@@ -68,6 +68,8 @@ internal sealed class FakeSettingsRuntime : ISettingsRuntime
 
     public OverlaySettings? AppliedOverlay { get; private set; }
 
+    public AlertThresholds? AppliedAlertThresholds { get; private set; }
+
     public ProviderRuntimeState? GetState(ProviderId provider) => States.GetValueOrDefault(provider);
 
     public string DescribeSource(ProviderId provider) => provider + " source: C:\\fixture";
@@ -98,6 +100,8 @@ internal sealed class FakeSettingsRuntime : ISettingsRuntime
     public string DescribeDataLocation() => @"C:\fixture\UseNotch";
 
     public void ApplyOverlaySettings(OverlaySettings settings) => AppliedOverlay = settings;
+
+    public void ApplyAlertThresholds(AlertThresholds thresholds) => AppliedAlertThresholds = thresholds;
 }
 
 public class MainWindowTests
@@ -153,7 +157,7 @@ public class MainWindowTests
         var viewModel = CreateViewModel();
 
         Assert.Equal(
-            [SettingsSection.Status, SettingsSection.Providers, SettingsSection.Appearance, SettingsSection.General, SettingsSection.Privacy, SettingsSection.About],
+            [SettingsSection.Status, SettingsSection.Providers, SettingsSection.Appearance, SettingsSection.Alerts, SettingsSection.General, SettingsSection.Privacy, SettingsSection.About],
             viewModel.Sections.Select(item => item.Section));
 
         // Each entry names itself and says what it is for, so the heading is not just an enum name.

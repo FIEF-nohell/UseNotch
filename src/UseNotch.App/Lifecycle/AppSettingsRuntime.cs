@@ -15,7 +15,8 @@ public sealed class AppSettingsRuntime(
     IUsageStateStore store,
     PollingCoordinator? polling,
     ActivityCoordinator? activity,
-    Action<OverlaySettings>? applyOverlay = null) : ISettingsRuntime
+    Action<OverlaySettings>? applyOverlay = null,
+    Action<AlertThresholds>? applyAlertThresholds = null) : ISettingsRuntime
 {
     private long _generation = 1;
 
@@ -88,6 +89,8 @@ public sealed class AppSettingsRuntime(
     public string DescribeDataLocation() => ApplicationPaths.Root;
 
     public void ApplyOverlaySettings(OverlaySettings settings) => applyOverlay?.Invoke(settings);
+
+    public void ApplyAlertThresholds(AlertThresholds thresholds) => applyAlertThresholds?.Invoke(thresholds);
 
     private static string Source(ProviderId provider) => provider == ProviderId.OpenAi ? "codex:default" : "claude:default";
 }

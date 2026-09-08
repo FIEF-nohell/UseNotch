@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UseNotch.App.ViewModels"
         xmlns:controls="using:UseNotch.App.Controls"
+        xmlns:app="using:UseNotch.Application"
+        xmlns:conv="using:Avalonia.Data.Converters"
         x:Class="UseNotch.App.Views.OverlayWindow"
         x:DataType="vm:OverlayViewModel"
         Title="UseNotch overlay"
@@ -146,6 +148,9 @@
                             Width="{Binding Fraction, Converter={x:Static vm:SeverityConverters.ToBarWidth}}" />
                   </Border>
                   <TextBlock Text="{Binding UsedText}" Classes="windowUsed" />
+                  <TextBlock Text="{Binding TrendText}"
+                             Classes="windowTrend"
+                             IsVisible="{Binding TrendText, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
                 </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -153,11 +158,24 @@
 
           <TextBlock x:Name="DetailText" Text="{Binding FreshnessText}" Classes="detailFooter" TextWrapping="Wrap" />
           <TextBlock Text="{Binding ActivityText}" Classes="detailFooter" TextWrapping="Wrap" />
-            <Button x:Name="CloseDetail"
-                    Classes="detailClose"
-                    Content="Close"
-                    Click="OnCloseDetailClicked"
-                    AutomationProperties.Name="Close provider details" />
+          <!--
+            Placed once here rather than repeated per window: the burn-rate figures above only reflect
+            readings taken since the app started, and start over on the next launch.
+          -->
+          <TextBlock Text="{x:Static app:UsageTrendPresenter.SessionEstimateCaveat}"
+                     Classes="detailFooter" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="CloseDetail"
+                      Classes="detailClose"
+                      Content="Close"
+                      Click="OnCloseDetailClicked"
+                      AutomationProperties.Name="Close provider details" />
+              <Button x:Name="CopySummary"
+                      Classes="detailClose"
+                      Content="Copy"
+                      Click="OnCopySummaryClicked"
+                      AutomationProperties.Name="Copy usage summary" />
+            </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </Border>
@@ -173,6 +191,35 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Top" />
     </Grid>
+
+    <!--
+      The threshold-crossing notice. Anchored above the notch rather than the detail callout's position,
+      so an alert that arrives while details are open never overlaps the panel it would be explaining.
+    -->
+    <Border x:Name="NoticeBanner"
+            IsVisible="{Binding ActiveNotice, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+            Background="#FF000000"
+            CornerRadius="16"
+            Padding="16,12"
+            MaxWidth="300"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,40,20,0"
+            Opacity="0">
+      <Border.Transitions>
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" Easing="CubicEaseOut" />
+        </Transitions>
+      </Border.Transitions>
+      <StackPanel Spacing="8" DataContext="{Binding ActiveNotice}">
+        <TextBlock Text="{Binding Message}" Classes="noticeMessage" TextWrapping="Wrap" />
+        <Button x:Name="DismissNotice"
+                Classes="detailClose"
+                Content="Dismiss"
+                Click="OnDismissNoticeClicked"
+                AutomationProperties.Name="Dismiss usage notice" />
+      </StackPanel>
+    </Border>
   </Grid>
 
   <Window.Styles>
@@ -220,6 +267,14 @@
     <Style Selector="TextBlock.windowUsed">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="#FFB3BBC7" />
+    </Style>
+    <Style Selector="TextBlock.windowTrend">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#FF8A93A0" />
+    </Style>
+    <Style Selector="TextBlock.noticeMessage">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="#FFF2F4F7" />
     </Style>
     <Style Selector="TextBlock.detailFooter">
       <Setter Property="FontSize" Value="11" />

@@ -8,7 +8,7 @@ using UseNotch.Domain;
 
 namespace UseNotch.App.ViewModels;
 
-public enum SettingsSection { Status, Providers, Appearance, General, Privacy, About }
+public enum SettingsSection { Status, Providers, Appearance, Alerts, General, Privacy, About }
 
 /// <summary>
 /// One entry in the settings navigation. Selection state lives here rather than being derived in the
@@ -53,6 +53,8 @@ public interface ISettingsRuntime
     string DescribeDataLocation();
 
     void ApplyOverlaySettings(OverlaySettings settings);
+
+    void ApplyAlertThresholds(AlertThresholds thresholds);
 }
 
 public partial class ProviderSettingsViewModel : ObservableObject
@@ -262,6 +264,7 @@ public partial class SettingsViewModel : ObservableObject
             new(SettingsSection.Status, "Status", "What each provider is reporting right now."),
             new(SettingsSection.Providers, "Providers", "Which providers are monitored and where their credentials are read from."),
             new(SettingsSection.Appearance, "Appearance", "Where the overlay sits and how it behaves on screen."),
+            new(SettingsSection.Alerts, "Alerts", "The usage levels that turn a reading to caution or critical."),
             new(SettingsSection.General, "General", "Launching with Windows, and pausing all monitoring."),
             new(SettingsSection.Privacy, "Privacy", "What is observed locally, what is logged, and how to clear it."),
             new(SettingsSection.About, "About", "Version, data location, and what this application does with credentials."),
@@ -341,6 +344,12 @@ public partial class SettingsViewModel : ObservableObject
     private bool _visibleOverFullScreen;
 
     [ObservableProperty]
+    private double _warningThresholdPercent = AlertThresholds.Default.WarningPercent;
+
+    [ObservableProperty]
+    private double _criticalThresholdPercent = AlertThresholds.Default.CriticalPercent;
+
+    [ObservableProperty]
     private bool _paused;
 
     [ObservableProperty]
@@ -400,6 +409,8 @@ public partial class SettingsViewModel : ObservableObject
         UiScale = settings.Overlay.UiScale;
         ReducedMotion = settings.Overlay.ReducedMotion;
         VisibleOverFullScreen = settings.Overlay.VisibleOverFullScreen;
+        WarningThresholdPercent = settings.Alerts.WarningPercent;
+        CriticalThresholdPercent = settings.Alerts.CriticalPercent;
         LaunchAtLogin = settings.LaunchAtLogin;
         ActivityMonitoringEnabled = settings.Privacy.ActivityMonitoringEnabled;
         DiagnosticsEnabled = settings.Privacy.DiagnosticsEnabled;
@@ -415,7 +426,8 @@ public partial class SettingsViewModel : ObservableObject
         Providers.First(provider => provider.Provider == ProviderId.Anthropic).ToSettings(),
         new OverlaySettings(MonitorId, Edge, OffsetX, OffsetY, Pinned, OverlayVisible, UiScale, ReducedMotion, VisibleOverFullScreen),
         new PrivacySettings(ActivityMonitoringEnabled, DiagnosticsEnabled),
-        LaunchAtLogin);
+        LaunchAtLogin,
+        new AlertThresholds(WarningThresholdPercent, CriticalThresholdPercent));
 
     public void RefreshProviders()
     {
@@ -435,6 +447,7 @@ public partial class SettingsViewModel : ObservableObject
         var settings = SettingsValidator.Normalize(ToSettings());
         await _repository.SaveAsync(settings, CancellationToken.None).ConfigureAwait(true);
         _runtime.ApplyOverlaySettings(settings.Overlay);
+        _runtime.ApplyAlertThresholds(settings.Alerts);
     }
 
     [RelayCommand]
@@ -512,6 +525,10 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnReducedMotionChanged(bool value) => _ = PersistAsync();
 
     partial void OnVisibleOverFullScreenChanged(bool value) => _ = PersistAsync();
+
+    partial void OnWarningThresholdPercentChanged(double value) => _ = PersistAsync();
+
+    partial void OnCriticalThresholdPercentChanged(double value) => _ = PersistAsync();
 
     partial void OnActivityMonitoringEnabledChanged(bool value) => _ = PersistAsync();
 

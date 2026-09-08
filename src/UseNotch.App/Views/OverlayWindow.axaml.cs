@@ -104,6 +104,12 @@ public partial class OverlayWindow : Window
             AddRegion(hover, DetailPanel);
         }
 
+        if (NoticeBanner.IsVisible)
+        {
+            AddRegion(interactive, NoticeBanner);
+            AddRegion(hover, NoticeBanner);
+        }
+
         return new OverlayRegionSnapshot(new DipSize(ClientSize.Width, ClientSize.Height), interactive, hover);
     }
 
@@ -228,6 +234,43 @@ public partial class OverlayWindow : Window
         RefreshRegions();
     }
 
+    private void OnDismissNoticeClicked(object? sender, RoutedEventArgs e)
+    {
+        _viewModel.DismissNoticeCommand.Execute(null);
+        RefreshRegions();
+    }
+
+    /// <summary>
+    /// Copies a one-line, non-identifying usage summary for whichever provider's details are open. The
+    /// summary text itself is built in the view model, where it is testable without a window; only the
+    /// clipboard call, which needs a <see cref="TopLevel"/>, lives here.
+    /// </summary>
+    private async void OnCopySummaryClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel.DetailProvider is not { } provider)
+        {
+            return;
+        }
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            return;
+        }
+
+        await clipboard.SetTextAsync(provider.BuildCopySummary()).ConfigureAwait(true);
+
+        // A short text swap confirms the copy happened. There is no motion here to gate behind reduced
+        // motion, only the label itself changing and then changing back.
+        if (sender is Button button)
+        {
+            var original = button.Content;
+            button.Content = "Copied";
+            await Task.Delay(TimeSpan.FromSeconds(1.5)).ConfigureAwait(true);
+            button.Content = original;
+        }
+    }
+
     private void OpenDetail(ProviderId provider)
     {
         _viewModel.ShowDetail(provider);
@@ -245,6 +288,43 @@ public partial class OverlayWindow : Window
         {
             AnimateNotchEntrance();
         }
+
+        if (e.PropertyName == nameof(OverlayViewModel.ActiveNotice))
+        {
+            RefreshRegions();
+            AnimateNoticeEntrance();
+        }
+    }
+
+    /// <summary>
+    /// Fades the notice in the same way the notch slides in: a reduced-motion preference sets the
+    /// resting value directly rather than animating to it. The auto-dismiss timer that produced this
+    /// change already ran on the view model regardless of this preference; only the visible motion is
+    /// skipped here.
+    /// </summary>
+    private void AnimateNoticeEntrance()
+    {
+        if (_viewModel.ActiveNotice is null)
+        {
+            NoticeBanner.Opacity = 0;
+            return;
+        }
+
+        NoticeBanner.Opacity = _viewModel.ReducedMotion ? 1 : 0;
+        if (_viewModel.ReducedMotion)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (_viewModel.ActiveNotice is not null)
+                {
+                    NoticeBanner.Opacity = 1;
+                }
+            },
+            DispatcherPriority.Background);
     }
 
     /// <summary>

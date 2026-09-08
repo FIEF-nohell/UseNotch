@@ -169,7 +169,9 @@ public partial class App : Avalonia.Application
     private SettingsViewModel CreateSettingsViewModel() => new(
         _settingsRepository,
         _startupRegistration,
-        new AppSettingsRuntime(_store, _pollingCoordinator, _activityCoordinator, ApplyOverlaySettings));
+        new AppSettingsRuntime(_store, _pollingCoordinator, _activityCoordinator, ApplyOverlaySettings, ApplyAlertThresholds));
+
+    private void ApplyAlertThresholds(AlertThresholds thresholds) => _overlayViewModel.Thresholds = thresholds.ToSeverityThresholds();
 
     private void ApplyOverlaySettings(OverlaySettings settings)
     {
@@ -238,6 +240,7 @@ public partial class App : Avalonia.Application
         // Placement and visibility belong to the overlay, not to whether a provider happens to be
         // enabled. Disabling both providers must not silently leave the overlay wherever it started.
         ApplyOverlaySettings(settings.Overlay);
+        ApplyAlertThresholds(settings.Alerts);
     }
 
     private void StartProviderPolling(bool enableCodex, bool enableClaude, bool enableActivity)

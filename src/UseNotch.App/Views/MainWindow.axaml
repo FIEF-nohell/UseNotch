@@ -268,6 +268,38 @@
             </StackPanel>
           </StackPanel>
 
+          <!-- Alerts -->
+          <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAlerts}}">
+            <StackPanel Spacing="0">
+              <TextBlock Text="Severity thresholds" Classes="groupHeading" />
+              <Border Classes="field">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Warning threshold" Classes="fieldName" />
+                    <TextBlock Text="Usage at or above this percentage turns caution-coloured." Classes="hint" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <NumericUpDown Value="{Binding WarningThresholdPercent}" Minimum="1" Maximum="99" Increment="1" Width="112" />
+                    <TextBlock Text="%" Classes="axis" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border Classes="field last">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock Text="Critical threshold" Classes="fieldName" />
+                    <TextBlock Text="Usage at or above this percentage turns critical-coloured. Critical must be higher than warning."
+                               Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <NumericUpDown Value="{Binding CriticalThresholdPercent}" Minimum="1" Maximum="99" Increment="1" Width="112" />
+                    <TextBlock Text="%" Classes="axis" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+
           <!-- General -->
           <StackPanel Spacing="26" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsGeneral}}">
             <StackPanel Spacing="0">
