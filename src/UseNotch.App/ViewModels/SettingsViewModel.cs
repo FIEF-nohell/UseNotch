@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UseNotch.Application;
@@ -243,7 +244,23 @@ public partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<OverlayEdge> Edges { get; } = Enum.GetValues<OverlayEdge>();
 
-    public string Version { get; } = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    /// <summary>
+    /// Product identity, read from the compiled assembly rather than repeated here. The build defines
+    /// these once in Directory.Build.props, so About, Explorer, and the installer cannot disagree.
+    /// </summary>
+    private static readonly Assembly ProductAssembly = typeof(SettingsViewModel).Assembly;
+
+    public string Version { get; } = ProductAssembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    public string ProductName { get; } =
+        ProductAssembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "UseNotch";
+
+    public string Tagline { get; } =
+        ProductAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description
+        ?? "Usage overlay for OpenAI Codex and Anthropic Claude Code";
+
+    public string Copyright { get; } =
+        ProductAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
 
     [ObservableProperty]
     private SettingsSection _selectedSection = SettingsSection.Status;

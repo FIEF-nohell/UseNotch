@@ -6,14 +6,14 @@
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="UseNotch"
-           Manufacturer="UseNotch"
+           Manufacturer="Noel Hermann"
            Version="$(var.ProductVersion)"
            UpgradeCode="8f3d6c41-5b27-4a19-9d0e-2c7a41f6b8d5"
            Scope="perUser"
            Compressed="yes"
            InstallerVersion="500">
 
-    <SummaryInformation Description="UseNotch usage overlay for OpenAI Codex and Anthropic Claude Code" />
+    <SummaryInformation Description="UseNotch, a usage overlay for OpenAI Codex and Anthropic Claude Code" />
 
     <!-- A downgrade is rejected rather than silently installing older files over newer ones. -->
     <MajorUpgrade AllowDowngrades="no"
@@ -21,6 +21,16 @@
                   Schedule="afterInstallValidate" />
 
     <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Apps and Features reads these. Without them the entry carries no icon, offers a Repair that
+      this package has no meaningful answer for, and gives the user no way back to the project.
+    -->
+    <Icon Id="UseNotchIcon" SourceFile="$(var.IconSource)" />
+    <Property Id="ARPPRODUCTICON" Value="UseNotchIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/FIEF-nohell/UseNotch" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/FIEF-nohell/UseNotch/issues" />
+    <Property Id="ARPNOREPAIR" Value="1" />
 
     <!-- Restart Manager can close a running UseNotch instead of forcing a reboot for a locked file. -->
     <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
@@ -53,9 +63,10 @@
       <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="2b6f9a7c-51d3-4e88-b0c4-9f5a1e7d3c62">
         <Shortcut Id="UseNotchShortcut"
                   Name="UseNotch"
-                  Description="Usage overlay for OpenAI Codex and Anthropic Claude Code"
+                  Description="Show OpenAI Codex and Anthropic Claude Code usage in a screen-edge overlay"
                   Target="[INSTALLFOLDER]UseNotch.App.exe"
-                  WorkingDirectory="INSTALLFOLDER" />
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="UseNotchIcon" />
         <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
         <!--
           Uninstall removes the launch-at-login entry this application owns. Settings and cache under

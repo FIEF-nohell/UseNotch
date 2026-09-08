@@ -135,10 +135,13 @@
         <StackPanel Spacing="10" IsVisible="{Binding SelectedSection, Converter={x:Static vm:SectionConverters.IsAbout}}">
           <Border Classes="row">
             <StackPanel Spacing="6">
-              <TextBlock Text="About" Classes="heading" />
+              <TextBlock Text="{Binding ProductName}" Classes="heading" />
+              <TextBlock Text="{Binding Tagline}" Classes="detail" TextWrapping="Wrap" />
               <TextBlock Text="{Binding Version, StringFormat=Version {0}}" Classes="detail" />
+              <TextBlock Text="{Binding Copyright}" Classes="detail" />
               <TextBlock Text="{Binding DataLocation}" Classes="detail" TextWrapping="Wrap" />
               <TextBlock Text="UseNotch reads OpenAI Codex and Anthropic Claude Code credentials locally and read-only. It never refreshes, stores, or forwards them." Classes="detail" TextWrapping="Wrap" />
+              <TextBlock Text="OpenAI, Codex, Anthropic, and Claude are trademarks of their respective owners. UseNotch is an independent tool and is not affiliated with or endorsed by either." Classes="detail" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
         </StackPanel>

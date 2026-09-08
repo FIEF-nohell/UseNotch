@@ -4,6 +4,11 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\usenotch.ico</ApplicationIcon>
+    <!--
+      Windows shows AssemblyTitle as the file description in Explorer, Task Manager, and the Restart
+      Manager prompt. Without this it would read "UseNotch.App", which is the assembly, not the product.
+    -->
+    <AssemblyTitle>UseNotch</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />

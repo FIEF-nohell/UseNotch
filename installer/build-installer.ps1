@@ -106,6 +106,11 @@ if (-not (Test-Path -LiteralPath $applicationPath)) {
     throw 'The publish output does not contain UseNotch.App.exe.'
 }
 
+$iconSource = Join-Path $repositoryRoot 'src/UseNotch.App/Assets/usenotch.ico'
+if (-not (Test-Path -LiteralPath $iconSource)) {
+    throw "The application icon is missing at '$iconSource'."
+}
+
 Write-Output 'Adding the pinned WiX extension'
 dotnet wix extension add --global WixToolset.Util.wixext/5.0.2
 if ($LASTEXITCODE -ne 0) { throw 'Adding the WiX util extension failed.' }
@@ -117,6 +122,7 @@ dotnet wix build `
     -ext WixToolset.Util.wixext `
     -d ProductVersion=$productVersion `
     -d PublishDir=$publishDirectory `
+    -d IconSource=$iconSource `
     -bindpath $publishDirectory `
     -out $msiPath `
     (Join-Path $PSScriptRoot 'UseNotch.wxs')

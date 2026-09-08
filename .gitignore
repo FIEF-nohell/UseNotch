@@ -31,3 +31,6 @@ captures/
 *.dmp
 *.etl
 *.nettrace
+
+# Python bytecode from the asset generator
+__pycache__/

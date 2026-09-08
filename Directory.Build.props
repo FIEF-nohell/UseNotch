@@ -19,6 +19,18 @@
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
+
+    <!--
+      One source of truth for the product's identity. These flow into the compiled assembly metadata,
+      so Explorer, Task Manager, the installer, and the About section all name the product the same way
+      instead of falling back to an assembly name like "UseNotch.App".
+    -->
+    <Product>UseNotch</Product>
+    <Company>Noel Hermann</Company>
+    <Authors>Noel Hermann</Authors>
+    <Copyright>Copyright (c) 2026 Noel Hermann</Copyright>
+    <Description>Usage overlay for OpenAI Codex and Anthropic Claude Code</Description>
+    <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
 </Project>

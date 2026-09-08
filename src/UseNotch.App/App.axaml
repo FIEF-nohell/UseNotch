@@ -8,7 +8,7 @@
   <TrayIcon.Icons>
     <TrayIcons>
       <TrayIcon Icon="/Assets/usenotch.ico"
-                ToolTipText="UseNotch status"
+                ToolTipText="UseNotch, Codex and Claude Code usage"
                 Clicked="OnTrayIconClicked">
         <TrayIcon.Menu>
           <NativeMenu>
