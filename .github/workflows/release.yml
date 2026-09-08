@@ -3,8 +3,13 @@ name: Release
 # Runs only for a tag the repository owner pushes deliberately. It is never triggered by a pull
 # request, so a fork can never reach a signing credential or publish an artifact.
 #
-# Publication itself is R01 and still requires explicit authorization. This workflow builds, validates,
-# and verifies version agreement; it creates a draft release only, never a published one.
+# The owner authorized publishing on 2026-09-08, so a tag now produces a visible prerelease rather than
+# an invisible draft. A draft is only reachable by accounts with push access, which made the artifact
+# undownloadable in practice.
+#
+# Prerelease, not a full release: the MSI is unsigned and the install matrix has not been run. That
+# status is stated in the notes rather than hidden by keeping the release invisible. Promoting a build
+# to a full release stays a separate, deliberate decision.
 
 on:
   push:
@@ -58,7 +63,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Create draft release
+      - name: Publish prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -73,16 +78,17 @@ jobs:
           Verified for this build: locked restore, a zero-warning Release build, the full test
           suite, formatting, and the installer structure check.
 
-          Not yet verified, which is why this stays a draft:
+          Not yet verified, which is why this is a prerelease:
 
-          - The artifact is not signed. Signing is part of release hardening and has not been done.
+          - The artifact is not signed, so SmartScreen will warn on install. Signing is part of
+            release hardening and has not been done.
           - Clean install, upgrade, downgrade, uninstall, and interrupted upgrade have not been run
             in a disposable Windows environment.
           - .NET 8 leaves support on 2026-11-10. Confirm the runtime against the shipping date.
 
-          Publishing this draft is a separate, deliberate decision.
+          Install it only if you are comfortable with that.
           "@
           gh release create "${{ github.ref_name }}" (Get-Item artifacts/installer/*.msi).FullName `
-            --draft `
+            --prerelease `
             --title "UseNotch ${{ github.ref_name }}" `
             --notes $notes
