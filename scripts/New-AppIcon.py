@@ -16,29 +16,32 @@ import os
 
 from PIL import Image, ImageDraw
 
-# Brand tokens. The tile is the overlay surface and the accents are the two provider colours the
-# application already uses, so the icon is built from the running palette rather than a separate one.
+# Brand tokens. The tile is the overlay's own surface colour and the ring is the same near-white the
+# overlay writes its numbers in, so the icon is built from the running palette.
+#
+# The ring is deliberately not a provider colour. It carried OpenAI's green and a dot in Anthropic's
+# clay, which made a tool that belongs to neither look like it belonged to one of them, and the dot read
+# as a detached blob at small sizes. White also holds its shape at a sixteen pixel entry, where a
+# saturated hue on near-black loses contrast.
 TILE = (11, 13, 16, 255)
-ARC = (31, 214, 159, 255)       # OpenAI accent
-HEAD = (255, 122, 77, 255)      # Anthropic accent
+ARC = (244, 244, 245, 255)
 
 # Geometry in a 0..1 canvas. Every value is a fraction of the icon's edge, so one definition scales to
 # every raster size and to the vector.
 INSET = 0.050                   # keeps the tile off the canvas edge so it survives Windows padding
 CORNER = 0.205                  # tile corner radius
 RING_CENTRE = (0.5, 0.5)
-RING_RADIUS = 0.205             # centreline of the stroke
-RING_STROKE = 0.098
+RING_RADIUS = 0.212             # centreline of the stroke
+RING_STROKE = 0.118
 RING_START_DEGREES = -58.0      # leaves the ring at the notch's right wall
 RING_SWEEP_DEGREES = 268.0
-HEAD_RADIUS = 0.056
-NOTCH_HALF_WIDTH = 0.105        # half the flat span of the notch cut through the ring
+NOTCH_HALF_WIDTH = 0.118        # half the flat span of the notch cut through the ring
 NOTCH_FLOOR = 0.380             # reaches past the inner edge of the ring, so the cut is complete
 NOTCH_CORNER = 0.040            # convex rounding at the notch floor
 
 SIZES = (256, 128, 64, 48, 32, 24, 16)
-SUPERSAMPLE = 8
-CURVE_STEPS = 24
+SUPERSAMPLE = 16
+CURVE_STEPS = 48
 
 
 def quadratic(start, control, end, steps=CURVE_STEPS):
@@ -100,6 +103,18 @@ def notch_outline():
     return points
 
 
+def annulus_sector(centre, radius, stroke, start_degrees, sweep_degrees, steps=None):
+    """Builds a filled arc of even thickness, as an outer sweep followed by the inner sweep reversed."""
+    steps = steps or max(24, int(abs(sweep_degrees) / 2))
+    outer, inner = [], []
+    for step in range(steps + 1):
+        angle = math.radians(start_degrees + sweep_degrees * step / steps)
+        cos, sin = math.cos(angle), math.sin(angle)
+        outer.append((centre[0] + (radius + stroke / 2) * cos, centre[1] + (radius + stroke / 2) * sin))
+        inner.append((centre[0] + (radius - stroke / 2) * cos, centre[1] + (radius - stroke / 2) * sin))
+    return outer + inner[::-1]
+
+
 def draw_icon(size: int) -> Image.Image:
     """Draws at a multiple of the target size and downsamples, so small icons keep clean edges."""
     scale = size * SUPERSAMPLE
@@ -110,19 +125,12 @@ def draw_icon(size: int) -> Image.Image:
 
     centre = (RING_CENTRE[0] * scale, RING_CENTRE[1] * scale)
     radius = RING_RADIUS * scale
-    stroke = max(1, int(round(RING_STROKE * scale)))
-    box = [centre[0] - radius, centre[1] - radius, centre[0] + radius, centre[1] + radius]
+    stroke = RING_STROKE * scale
     # No unfilled track behind the sweep. At sixteen pixels a second grey ring only muddies
     # the shape, and the notch already carries the identity.
-    draw.arc(box, start=RING_START_DEGREES, end=RING_START_DEGREES + RING_SWEEP_DEGREES,
-             fill=ARC, width=stroke)
-
-    # The head marks where the sweep ends, in the second accent, so both providers are present.
-    end = math.radians(RING_START_DEGREES + RING_SWEEP_DEGREES)
-    head = (centre[0] + radius * math.cos(end), centre[1] + radius * math.sin(end))
-    head_radius = HEAD_RADIUS * scale
-    draw.ellipse([head[0] - head_radius, head[1] - head_radius,
-                  head[0] + head_radius, head[1] + head_radius], fill=HEAD)
+    draw.polygon(
+        annulus_sector(centre, radius, stroke, RING_START_DEGREES, RING_SWEEP_DEGREES),
+        fill=ARC)
 
     # The notch is drawn last, in the tile colour, so it cuts the ring rather than sitting on it.
     draw.polygon([(x * scale, y * scale) for x, y in notch_outline()], fill=TILE)
@@ -171,7 +179,6 @@ def build_svg(size: int = 256) -> str:
         ' rx="{corner:.3f}" fill="{tile}"/>',
         '  <path d="M {sx:.3f},{sy:.3f} A {r:.3f},{r:.3f} 0 {large} 1 {ex:.3f},{ey:.3f}"'
         ' fill="none" stroke="{arc}" stroke-width="{stroke:.3f}"/>',
-        '  <circle cx="{ex:.3f}" cy="{ey:.3f}" r="{head:.3f}" fill="{headfill}"/>',
         '  <path d="{notch}" fill="{tile}"/>',
         "</svg>",
         "",
@@ -179,9 +186,9 @@ def build_svg(size: int = 256) -> str:
 
     return chr(10).join(lines).format(
         size=size, inset=inset, side=side, corner=CORNER * size, tile=to_hex(TILE),
-        arc=to_hex(ARC), headfill=to_hex(HEAD), r=radius, stroke=RING_STROKE * size,
+        arc=to_hex(ARC), r=radius, stroke=RING_STROKE * size,
         sx=start_point[0], sy=start_point[1], ex=end_point[0], ey=end_point[1],
-        large=large, head=HEAD_RADIUS * size, notch=notch,
+        large=large, notch=notch,
     )
 
 def main() -> None:
@@ -190,7 +197,8 @@ def main() -> None:
 
     icon = os.path.join(assets, "usenotch.ico")
     frames = [draw_icon(size) for size in SIZES]
-    frames[0].save(icon, format="ICO", sizes=[(size, size) for size in SIZES])
+    frames[0].save(icon, format="ICO", sizes=[(size, size) for size in SIZES],
+                   append_images=frames[1:])
     print("wrote {} ({} bytes, sizes {})".format(icon, os.path.getsize(icon), SIZES))
 
     svg = os.path.join(assets, "usenotch.svg")

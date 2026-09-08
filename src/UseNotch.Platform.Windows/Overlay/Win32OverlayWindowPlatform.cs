@@ -108,14 +108,30 @@ public sealed class Win32OverlayWindowPlatform : IOverlayWindowPlatform
 
         var clientRect = new NativeRect();
         var snapshot = _interactiveRegionProvider();
-        IReadOnlyList<PixelRect> regions = [];
-        IReadOnlyList<PixelRect> hoverRegions = [];
-        if (GetClientRect(_windowHandle, ref clientRect))
+        if (!GetClientRect(_windowHandle, ref clientRect))
         {
-            var clientSize = new PixelSize(clientRect.Right - clientRect.Left, clientRect.Bottom - clientRect.Top);
-            regions = OverlayRegionScaler.ToClientPixels(snapshot.Regions, snapshot.ClientSize, clientSize);
-            hoverRegions = OverlayRegionScaler.ToClientPixels(snapshot.HoverRegions, snapshot.ClientSize, clientSize);
+            // The client rect can fail transiently while the window is being restyled. The two caches
+            // are treated differently on that failure, because the safe answer differs.
+            //
+            // Interactive regions are cleared: with none, the window is click-through, so a failure here
+            // can never capture input the overlay does not own.
+            //
+            // Hover regions are kept. Emptying them says the pointer is outside the overlay, which
+            // collapsed it under a pointer that had not moved and then reopened it on the next poll.
+            // The last known regions are stale for at most one poll; claiming the overlay occupies
+            // nothing is wrong immediately.
+            lock (_gate)
+            {
+                _cachedRegions = [];
+            }
+
+            ApplyClickThrough();
+            return;
         }
+
+        var clientSize = new PixelSize(clientRect.Right - clientRect.Left, clientRect.Bottom - clientRect.Top);
+        var regions = OverlayRegionScaler.ToClientPixels(snapshot.Regions, snapshot.ClientSize, clientSize);
+        var hoverRegions = OverlayRegionScaler.ToClientPixels(snapshot.HoverRegions, snapshot.ClientSize, clientSize);
 
         lock (_gate)
         {
