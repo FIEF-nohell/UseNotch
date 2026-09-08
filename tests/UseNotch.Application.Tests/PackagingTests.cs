@@ -111,8 +111,12 @@ public class PackagingTests
 
         Assert.DoesNotContain("pull_request", release, StringComparison.Ordinal);
         Assert.Contains("permissions:\n  contents: read", release.ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        // A release is created as a draft; publication is R01 and needs explicit authorization.
-        Assert.Contains("--draft", release, StringComparison.Ordinal);
+        // Publishing was authorized on 2026-09-08, so a tag produces a visible prerelease. It must stay
+        // a prerelease while the artifact is unsigned and M12's install matrix has not been run: a full
+        // release would present an unverified build as a verified one.
+        Assert.Contains("--prerelease", release, StringComparison.Ordinal);
+        Assert.DoesNotContain("--draft", release, StringComparison.Ordinal);
+        Assert.Contains("not signed", release, StringComparison.Ordinal);
     }
 
     [Fact]
