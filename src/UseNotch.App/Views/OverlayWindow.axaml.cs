@@ -166,6 +166,36 @@ public partial class OverlayWindow : Window
         regions.Add(new DipRect(origin.X, origin.Y, control.Bounds.Width, control.Bounds.Height));
     }
 
+    /// <summary>
+    /// Points the callout's tail at the cell whose details are open. Centring it looked correct only
+    /// when the opened provider happened to be the middle one, which with two cells is never.
+    /// </summary>
+    private void AlignDetailTail()
+    {
+        if (!DetailPanel.IsVisible || _viewModel.DetailProvider is not { } detail)
+        {
+            return;
+        }
+
+        // The ring, not the whole cell: a cell also contains the percentage label underneath, so its
+        // midpoint sits visibly below the ring the tail is supposed to be pointing at.
+        var ring = detail.Provider == ProviderId.OpenAi ? (Control)OpenAiRing : AnthropicRing;
+        if (ring.Bounds.Height <= 0 || DetailTail.Height <= 0)
+        {
+            return;
+        }
+
+        // A ring that cannot be translated yet simply leaves the tail where it is, rather than moving it
+        // somewhere arbitrary.
+        if (ring.TranslatePoint(new Point(0, ring.Bounds.Height / 2), DetailPanel) is not { } centre)
+        {
+            return;
+        }
+
+        var top = centre.Y - (DetailTail.Height / 2);
+        DetailTail.Margin = new Thickness(0, Math.Max(0, top), 0, 0);
+    }
+
     private void OnOpenAiClicked(object? sender, RoutedEventArgs e) => OpenDetail(ProviderId.OpenAi);
 
     private void OnAnthropicClicked(object? sender, RoutedEventArgs e) => OpenDetail(ProviderId.Anthropic);
@@ -199,6 +229,7 @@ public partial class OverlayWindow : Window
                 ? "UseNotch overlay open"
                 : "UseNotch overlay";
         UpdateLayout();
+        AlignDetailTail();
         InteractiveRegionsChanged?.Invoke(this, EventArgs.Empty);
     }
 }

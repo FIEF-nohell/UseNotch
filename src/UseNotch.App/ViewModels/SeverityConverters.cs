@@ -2,7 +2,6 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using UseNotch.Application;
-using UseNotch.Domain;
 
 namespace UseNotch.App.ViewModels;
 
@@ -12,17 +11,10 @@ namespace UseNotch.App.ViewModels;
 /// </summary>
 public static class SeverityConverters
 {
-    // Each provider keeps its own accent on its ring, so the two are told apart at a glance. Severity
-    // still overrides it once a window is close to or past its limit, which is the thing worth warning
-    // about; the detail bars stay severity-coloured throughout.
-    //
-    // Both accents keep their brand hue but are lifted in saturation and lightness, because the brand
-    // values are chosen for white backgrounds and go muddy on a black surface at a four-pixel stroke.
-    // OpenAI green 10A37F becomes 1FD69F; Claude clay D97757 becomes FF7A4D.
-    public static IBrush OpenAiAccent { get; } = new SolidColorBrush(Color.Parse("#1FD69F"));
-
-    public static IBrush AnthropicAccent { get; } = new SolidColorBrush(Color.Parse("#FF7A4D"));
-
+    // Rings and bars both read as usage: green, then yellow, then red. The ring used to carry each
+    // provider's brand accent while the reading was unremarkable, which meant the same colour said
+    // "this is Claude" in one state and "this is fine" in another. The provider mark inside the ring
+    // already says which provider it is, so colour is free to mean one thing only.
     public static IBrush NormalBrush { get; } = new SolidColorBrush(Color.Parse("#3BE08C"));
 
     public static IBrush CautionBrush { get; } = new SolidColorBrush(Color.Parse("#FFD24A"));
@@ -32,15 +24,6 @@ public static class SeverityConverters
     public static IBrush UnavailableBrush { get; } = new SolidColorBrush(Color.Parse("#6E7A8C"));
 
     public static IValueConverter ToArcBrush { get; } = new SeverityBrushConverter();
-
-    /// <summary>
-    /// Ring colour for a provider cell: the provider's own accent while the reading is unremarkable, and
-    /// the severity colour once it is worth warning about.
-    /// </summary>
-    public static IMultiValueConverter ToRingBrush { get; } = new RingBrushConverter();
-
-    public static IBrush AccentFor(ProviderId provider)
-        => provider == ProviderId.OpenAi ? OpenAiAccent : AnthropicAccent;
 
     /// <summary>
     /// Turns a used fraction into the width of a progress bar's filled part. The detail panel's bars are
@@ -58,21 +41,6 @@ public static class SeverityConverters
         _ => UnavailableBrush,
     };
 
-    private sealed class RingBrushConverter : IMultiValueConverter
-    {
-        public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
-        {
-            var severity = values.Count > 0 && values[0] is QuotaSeverity value ? value : QuotaSeverity.Unavailable;
-            var provider = values.Count > 1 && values[1] is ProviderId id ? id : ProviderId.OpenAi;
-            return severity switch
-            {
-                QuotaSeverity.Normal => AccentFor(provider),
-                QuotaSeverity.Caution => CautionBrush,
-                QuotaSeverity.Exhausted => ExhaustedBrush,
-                _ => UnavailableBrush,
-            };
-        }
-    }
 
     private sealed class BarWidthConverter : IValueConverter
     {

@@ -92,7 +92,8 @@ public class OverlayScenarioTests
 
     [AvaloniaTheory]
     [InlineData(0.0, "0% used", QuotaSeverity.Normal)]
-    [InlineData(0.85, "85% used", QuotaSeverity.Caution)]
+    [InlineData(0.6, "60% used", QuotaSeverity.Caution)]
+    [InlineData(0.85, "85% used", QuotaSeverity.Exhausted)]
     [InlineData(1.0, "100% used", QuotaSeverity.Exhausted)]
     [InlineData(1.2, "120% used", QuotaSeverity.Exhausted)]
     public void Supported_ring_values_keep_numeric_and_graphical_meaning_consistent(double used, string expectedText, QuotaSeverity expectedSeverity)

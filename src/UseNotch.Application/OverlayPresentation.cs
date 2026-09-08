@@ -97,7 +97,11 @@ public sealed record QuotaDisplay(
     bool IsOverLimit,
     string AutomationName)
 {
-    public const double CautionThreshold = 0.8;
+    // Green below caution, yellow up to exhausted, red from there. Red starts well before the limit
+    // on purpose: the point of the overlay is to warn while there is still room to change plan.
+    public const double CautionThreshold = 0.5;
+
+    public const double ExhaustedThreshold = 0.8;
 
     public static QuotaDisplay From(string providerName, ProviderRuntimeState? state, DateTimeOffset now)
     {
@@ -131,7 +135,7 @@ public sealed record QuotaDisplay(
         var freshness = DescribeFreshness(state, now);
         var severity = state.Status.Freshness == DataFreshness.Expired
             ? QuotaSeverity.Unavailable
-            : overLimit || used >= 1m
+            : overLimit || used >= (decimal)ExhaustedThreshold
                 ? QuotaSeverity.Exhausted
                 : used >= (decimal)CautionThreshold
                     ? QuotaSeverity.Caution

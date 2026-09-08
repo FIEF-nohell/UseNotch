@@ -203,10 +203,14 @@ public class QuotaDisplayTests
         Assert.Equal("40% used", display.ValueText);
     }
 
+    // Green below half, yellow to 79%, red from 80%. The boundaries are pinned on both sides so a
+    // threshold cannot be nudged without a test saying so.
     [Theory]
     [InlineData(0.0, QuotaSeverity.Normal)]
-    [InlineData(0.79, QuotaSeverity.Normal)]
-    [InlineData(0.8, QuotaSeverity.Caution)]
+    [InlineData(0.49, QuotaSeverity.Normal)]
+    [InlineData(0.5, QuotaSeverity.Caution)]
+    [InlineData(0.79, QuotaSeverity.Caution)]
+    [InlineData(0.8, QuotaSeverity.Exhausted)]
     [InlineData(1.0, QuotaSeverity.Exhausted)]
     [InlineData(1.4, QuotaSeverity.Exhausted)]
     public void Severity_follows_the_reading_rather_than_the_provider(double used, QuotaSeverity expected)

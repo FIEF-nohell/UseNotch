@@ -32,49 +32,16 @@
                            EdgeRadius="44"
                            Padding="0,16">
       <StackPanel Spacing="16">
-        <Button x:Name="OpenAiCell"
-                Classes="providerItem"
-                Click="OnOpenAiClicked"
-                AutomationProperties.Name="{Binding OpenAi.AutomationName}">
-          <StackPanel Spacing="2" HorizontalAlignment="Center">
-            <Panel Width="56" Height="56">
-              <controls:QuotaRing Width="56" Height="56"
-                                  StrokeThickness="4"
-                                  Fraction="{Binding OpenAi.RingFraction}">
-                <controls:QuotaRing.ArcBrush>
-                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
-                    <Binding Path="OpenAi.Severity" />
-                    <Binding Path="OpenAi.Provider" />
-                  </MultiBinding>
-                </controls:QuotaRing.ArcBrush>
-              </controls:QuotaRing>
-              <Path Data="{x:Static vm:ProviderGlyphs.OpenAi}"
-                    Fill="#FFF2F4F7"
-                    Width="24" Height="24"
-                    Stretch="Uniform"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center" />
-            </Panel>
-            <TextBlock Text="{Binding OpenAi.PercentText}" Classes="percent" />
-          </StackPanel>
-        </Button>
-
         <Button x:Name="AnthropicCell"
                 Classes="providerItem"
                 Click="OnAnthropicClicked"
                 AutomationProperties.Name="{Binding Anthropic.AutomationName}">
           <StackPanel Spacing="2" HorizontalAlignment="Center">
-            <Panel Width="56" Height="56">
+            <Panel x:Name="AnthropicRing" Width="56" Height="56">
               <controls:QuotaRing Width="56" Height="56"
                                   StrokeThickness="4"
-                                  Fraction="{Binding Anthropic.RingFraction}">
-                <controls:QuotaRing.ArcBrush>
-                  <MultiBinding Converter="{x:Static vm:SeverityConverters.ToRingBrush}">
-                    <Binding Path="Anthropic.Severity" />
-                    <Binding Path="Anthropic.Provider" />
-                  </MultiBinding>
-                </controls:QuotaRing.ArcBrush>
-              </controls:QuotaRing>
+                                  Fraction="{Binding Anthropic.RingFraction}"
+                                  ArcBrush="{Binding Anthropic.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
               <Path Data="{x:Static vm:ProviderGlyphs.Anthropic}"
                     Fill="#FFF2F4F7"
                     Width="24" Height="24"
@@ -85,6 +52,27 @@
             <TextBlock Text="{Binding Anthropic.PercentText}" Classes="percent" />
           </StackPanel>
         </Button>
+
+        <Button x:Name="OpenAiCell"
+                Classes="providerItem"
+                Click="OnOpenAiClicked"
+                AutomationProperties.Name="{Binding OpenAi.AutomationName}">
+          <StackPanel Spacing="2" HorizontalAlignment="Center">
+            <Panel x:Name="OpenAiRing" Width="56" Height="56">
+              <controls:QuotaRing Width="56" Height="56"
+                                  StrokeThickness="4"
+                                  Fraction="{Binding OpenAi.RingFraction}"
+                                  ArcBrush="{Binding OpenAi.Severity, Converter={x:Static vm:SeverityConverters.ToArcBrush}}" />
+              <Path Data="{x:Static vm:ProviderGlyphs.OpenAi}"
+                    Fill="#FFF2F4F7"
+                    Width="24" Height="24"
+                    Stretch="Uniform"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Panel>
+            <TextBlock Text="{Binding OpenAi.PercentText}" Classes="percent" />
+          </StackPanel>
+        </Button>
       </StackPanel>
     </controls:NotchSurface>
 
@@ -93,7 +81,7 @@
           IsVisible="{Binding ShowsDetails}"
           HorizontalAlignment="Right"
           VerticalAlignment="Center"
-          Margin="0,0,92,0">
+          Margin="0,0,100,0">
       <Border Background="#FF000000"
               CornerRadius="26"
               Padding="20,18"
@@ -142,12 +130,16 @@
         </ScrollViewer>
       </Border>
 
-      <!-- The tail that ties the callout to the notch. -->
-      <Path Data="M 0,0 L 10,10 L 0,20 Z"
+      <!--
+        The tail that ties the callout to the notch. Its vertical position is set in code so it points at
+        whichever provider was opened, rather than sitting at the callout's midpoint regardless.
+      -->
+      <Path x:Name="DetailTail"
+            Data="M 0,0 L 10,10 L 0,20 Z"
             Fill="#FF000000"
             Width="10" Height="20"
             HorizontalAlignment="Right"
-            VerticalAlignment="Center" />
+            VerticalAlignment="Top" />
     </Grid>
   </Grid>
 
