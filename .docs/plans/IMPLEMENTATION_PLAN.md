@@ -4,7 +4,7 @@ Build UseNotch as a non-elevated Windows tray application using C#, Avalonia UI 
 
 This plan is based on:
 
-- [Windows port brief](CODENOTCH_WINDOWS_PORT_BRIEF.md) and Codenotch commit `743601acd69e701131602b88082fcaeee0c2e88b`.
+- [Windows port brief](../research/CODENOTCH_WINDOWS_PORT_BRIEF.md) and Codenotch commit `743601acd69e701131602b88082fcaeee0c2e88b`.
 - [modshell-cs README](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/README.md), [project dependencies](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/modshell-cs.csproj), and [repository instructions](https://github.com/FIEF-nohell/modshell-cs/blob/bdaa8979db9b2e006d0f32f9c7dab716630ccd33/AGENTS.md), at commit `bdaa8979db9b2e006d0f32f9c7dab716630ccd33`.
 - Inspected lifecycle, tray, MVVM, gauge, chart, manifest, installer, and CI source in modshell-cs.
 - Inspected Codenotch provider adapters, credential readers, usage store, archive, activity monitors, overlay geometry, and relevant tests.

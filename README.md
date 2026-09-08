@@ -52,7 +52,7 @@ installs per user under `%LOCALAPPDATA%`, needs no administrator rights, and add
 
 > **Not yet signed.** Releases are currently drafts and the MSI carries no code signature, so
 > SmartScreen will warn. Signing and a clean-machine install matrix are open release gates, tracked in
-> [DEVELOPMENT_BUILD_PLAN.md](DEVELOPMENT_BUILD_PLAN.md). Install it only if you are comfortable with
+> [DEVELOPMENT_BUILD_PLAN.md](.docs/plans/DEVELOPMENT_BUILD_PLAN.md). Install it only if you are comfortable with
 > that.
 
 Uninstall removes the application and its launch-at-login entry. Settings and cache under
@@ -156,8 +156,8 @@ multi-size `usenotch.ico`, and the PNGs under `docs/brand`.
 
 M00 to M11 are complete. Packaging works and is validated structurally; the disposable-environment
 install matrix, the remaining hardware-dependent checks, and release hardening are open. Read
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the design and
-[DEVELOPMENT_BUILD_PLAN.md](DEVELOPMENT_BUILD_PLAN.md) for milestones, evidence, and what is still
+[IMPLEMENTATION_PLAN.md](.docs/plans/IMPLEMENTATION_PLAN.md) for the design and
+[DEVELOPMENT_BUILD_PLAN.md](.docs/plans/DEVELOPMENT_BUILD_PLAN.md) for milestones, evidence, and what is still
 unproven.
 
 ## Notices
